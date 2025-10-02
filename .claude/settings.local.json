@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\Users\\desktopGoto\\dev\\ESP32-ICSN-sensor-node\" branch)",
+      "Bash(git -C \"C:\\Users\\desktopGoto\\dev\\ESP32-ICSN-sensor-node\" status)",
+      "Read(//c/Users/desktopGoto/dev/ESP32-ICSN-sensor-node/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
