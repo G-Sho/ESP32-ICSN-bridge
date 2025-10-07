@@ -32,31 +32,23 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
 void handleUARTCommand(String cmd);
 
 void setup() {
-  Serial.begin(115200);    // USB用（デバッグ）
   Serial2.begin(115200, SERIAL_8N1, 16, 17);  // GPIO用: RX=GPIO16, TX=GPIO17
 
   delay(1000);
 
-  Serial.println("ESP32 Debug: Started - Using GPIO16/17");
-
   // WiFiをステーションモードに設定（ESP-NOW用）
   WiFi.mode(WIFI_STA);
-  Serial.print("MAC Address: ");
-  Serial.println(WiFi.macAddress());
 
   // ESP-NOW初期化
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW init failed");
-    Serial2.println("ERR:ESPNOW_INIT_FAIL");
+    Serial2.print("ERR:ESPNOW_INIT_FAIL\n");
     return;
   }
 
   // 受信コールバック登録
   esp_now_register_recv_cb(onESPNowReceive);
 
-  Serial.println("ESP-NOW initialized");
-  Serial2.println("ESP32 UART Bridge Started");
-  Serial2.println("READY");
+  Serial2.print("READY\n");
 }
 
 void loop() {
@@ -71,18 +63,10 @@ void loop() {
     String received = Serial2.readStringUntil('\n');
     received.trim();
 
-    Serial.print("Debug - UART received: ");
-    Serial.println(received);
-
-    handleUARTCommand(received);
-  }
-
-  // 定期的な統計情報出力（デバッグ用）
-  static unsigned long lastStats = 0;
-  if (millis() - lastStats > 10000) {
-    Serial.printf("Stats - RX:%u TX:%u DROP:%u\n",
-                  received_count, sent_count, dropped_count);
-    lastStats = millis();
+    // 空のコマンドは無視
+    if (received.length() > 0) {
+      handleUARTCommand(received);
+    }
   }
 
   delay(1);
@@ -137,8 +121,6 @@ void sendPacketToUART(const Packet *packet) {
   Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
 
   sent_count++;
-
-  Serial.printf("Debug - Sent to UART: MAC=%s Len=%u\n", mac_str, packet->len);
 }
 
 // ESP-NOW受信コールバック
@@ -146,7 +128,6 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   received_count++;
 
   if (len > MAX_ESPNOW_SIZE) {
-    Serial.println("Warning - Packet too large");
     dropped_count++;
     return;
   }
@@ -154,7 +135,6 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   if (!enqueuePacket(mac, data, len)) {
     // キュー満杯でドロップ
     dropped_count++;
-    Serial.println("Warning - Queue overflow, packet dropped");
   }
 }
 
@@ -165,7 +145,7 @@ void handleUARTCommand(String cmd) {
     int separator = cmd.indexOf('|', 3);
 
     if (separator == -1) {
-      Serial2.println("ERR:INVALID_FORMAT");
+      Serial2.print("ERR:INVALID_FORMAT\n");
       return;
     }
 
@@ -177,7 +157,7 @@ void handleUARTCommand(String cmd) {
     if (sscanf(mac_str.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &peer_mac[0], &peer_mac[1], &peer_mac[2],
                &peer_mac[3], &peer_mac[4], &peer_mac[5]) != 6) {
-      Serial2.println("ERR:INVALID_MAC");
+      Serial2.print("ERR:INVALID_MAC\n");
       return;
     }
 
@@ -190,7 +170,7 @@ void handleUARTCommand(String cmd) {
                                      encoded_data.length());
 
     if (ret != 0 || decoded_len == 0) {
-      Serial2.println("ERR:DECODE_FAIL");
+      Serial2.print("ERR:DECODE_FAIL\n");
       return;
     }
 
@@ -208,11 +188,9 @@ void handleUARTCommand(String cmd) {
     esp_err_t result = esp_now_send(peer_mac, decoded, decoded_len);
 
     if (result == ESP_OK) {
-      Serial2.println("OK");
-      Serial.println("Debug - ESP-NOW send success");
+      Serial2.print("OK\n");
     } else {
-      Serial2.println("ERR:SEND_FAIL");
-      Serial.printf("Debug - ESP-NOW send failed: %d\n", result);
+      Serial2.print("ERR:SEND_FAIL\n");
     }
   }
   else if (cmd == "STATS") {
@@ -221,10 +199,9 @@ void handleUARTCommand(String cmd) {
                    received_count, sent_count, dropped_count);
   }
   else if (cmd == "ping") {
-    // 互換性のため残す
-    Serial2.println("pong");
+    Serial2.print("pong\n");
   }
   else {
-    Serial2.println("ERR:UNKNOWN_CMD");
+    Serial2.print("ERR:UNKNOWN_CMD\n");
   }
 }

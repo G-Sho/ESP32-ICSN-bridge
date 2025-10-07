@@ -57,6 +57,47 @@ sudo systemctl disable serial-getty@ttyAMA0.service
 sudo systemctl disable hciuart
 ```
 
+### UART設定（エコーバック無効化）
+
+**重要**: Raspberry PiのUARTポートはデフォルトでエコーバックが有効になっています。これにより、ESP32が自分の送信データを受信してしまう問題が発生します。
+
+```bash
+# エコーバックを無効化（永続化しない場合）
+sudo stty -F /dev/ttyAMA0 -echo -echoe -echok
+
+# または完全な設定（推奨）
+sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+```
+
+**起動時に自動設定する場合**:
+
+`/etc/rc.local` に追加（`exit 0` の前に）:
+```bash
+stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+```
+
+または systemd サービスを作成:
+
+`/etc/systemd/system/uart-config.service`:
+```ini
+[Unit]
+Description=Configure UART settings
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+
+[Install]
+WantedBy=multi-user.target
+```
+
+有効化:
+```bash
+sudo systemctl enable uart-config.service
+sudo systemctl start uart-config.service
+```
+
 ### 再起動
 
 ```bash
@@ -157,6 +198,27 @@ ESP32 echo: test
 ```
 
 ## 6. トラブルシューティング
+
+### ESP32が自分の送信データを受信してしまう場合
+
+**症状**: ESP32から送信した `READY` や `pong` などが再度ESP32に戻ってくる
+
+**原因**: Raspberry PiのUARTポートでエコーバックが有効になっている
+
+**解決方法**:
+```bash
+# 現在の設定を確認
+stty -F /dev/ttyAMA0 -a
+
+# echoが「-echo」になっていることを確認（マイナスが重要）
+# もし「echo」（マイナスなし）なら、エコーバックが有効
+
+# エコーバックを無効化
+sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
+
+# 完全な設定（推奨）
+sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+```
 
 ### 文字化けする場合
 
