@@ -1,6 +1,6 @@
 # ESP32-Raspberry Pi UART接続ガイド
 
-## 1. ハードウェア接続
+## ハードウェア接続
 
 ### 物理配線
 
@@ -25,7 +25,7 @@ ESP32開発ボード      Raspberry Pi 3/4
 - **ストップビット**: 1
 - **フロー制御**: なし
 
-## 2. Raspberry Pi設定
+## Raspberry Pi設定
 
 ### UART有効化
 
@@ -104,7 +104,7 @@ sudo systemctl start uart-config.service
 sudo reboot
 ```
 
-## 3. GPIO設定確認
+## GPIO設定確認
 
 ```bash
 gpio readall
@@ -112,7 +112,7 @@ gpio readall
 
 GPIO14/15が**ALT0**になっていることを確認
 
-## 4. ESP32コード設定
+## ESP32コード設定
 
 ### main.cpp設定例
 
@@ -152,7 +152,7 @@ void loop() {
 }
 ```
 
-## 5. 動作確認
+## 動作確認
 
 ### ESP32アップロード
 
@@ -197,71 +197,9 @@ ESP32 received: test
 ESP32 echo: test
 ```
 
-## 6. トラブルシューティング
+## トラブルシューティング
 
-### ESP32が自分の送信データを受信してしまう場合
-
-**症状**: ESP32から送信した `READY` や `pong` などが再度ESP32に戻ってくる
-
-**原因**: Raspberry PiのUARTポートでエコーバックが有効になっている
-
-**解決方法**:
-```bash
-# 現在の設定を確認
-stty -F /dev/ttyAMA0 -a
-
-# echoが「-echo」になっていることを確認（マイナスが重要）
-# もし「echo」（マイナスなし）なら、エコーバックが有効
-
-# エコーバックを無効化
-sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
-
-# 完全な設定（推奨）
-sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
-```
-
-### 文字化けする場合
-
-1. **ボーレート確認**:
-   ```bash
-   stty -F /dev/ttyAMA0 115200
-   ```
-
-2. **GPIO設定確認**:
-   ```bash
-   gpio readall
-   ```
-   GPIO14/15がALT0であることを確認
-
-3. **配線確認**: クロス接続されているか確認
-
-### 何も受信しない場合
-
-1. **ESP32の動作確認**:
-   ```bash
-   pio device monitor
-   ```
-
-2. **システムサービス確認**:
-   ```bash
-   sudo systemctl status serial-getty@ttyAMA0.service
-   ```
-   (無効になっていることを確認)
-
-3. **ループバックテスト**:
-   ```bash
-   # ラズパイのTX/RXピンを直接接続してテスト
-   echo "test" | sudo tee /dev/ttyAMA0 &
-   sudo cat /dev/ttyAMA0
-   ```
-
-## 7. 次のステップ
-
-基本的な UART 通信が確認できれば、以下に進むことができます:
-
-1. **フェーズ2**: ICSN プロトコル処理の移植
-2. **ESP-NOW** 機能の追加
-3. **CEFORE 統合**
+問題が発生した場合は [troubleshooting.md](troubleshooting.md) を参照してください。
 
 ## 参考情報
 
