@@ -197,10 +197,6 @@ ESP32 received: test
 ESP32 echo: test
 ```
 
-## トラブルシューティング
-
-問題が発生した場合は [troubleshooting.md](troubleshooting.md) を参照してください。
-
 ## 参考情報
 
 - ESP32 シリアル通信: [Arduino ESP32 Serial](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html)

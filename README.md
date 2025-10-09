@@ -65,35 +65,6 @@ ERR:DECODE_FAIL\n       # Base64デコード失敗
 ERR:SEND_FAIL\n         # ESP-NOW送信失敗
 ```
 
-## 実装フェーズ
-
-### フェーズ1：基本ブリッジ ✓
-- ESP32シンプルブリッジ実装
-- UART通信確立
-- ESP-NOW受信・送信機能実装
-- 循環バッファによるパケットキューイング
-
-### フェーズ2：ICSN処理移植（次ステップ）
-- Raspberry Pi側ICSNエンジン
-- PIT/CS/FIBテーブル管理
-
-### フェーズ3：CEFORE統合
-- NDN変換機能
-- プロトコル変換の実装
-
-### フェーズ4：高度機能
-- Web UI・API
-- データベース・ログ
-
-## ドキュメント
-
-- [UART接続ガイド](docs/connection-guide.md) - Raspberry Piとの接続手順
-- [トラブルシューティング](docs/troubleshooting.md) - 問題解決ガイド
-
-## セットアップ
-
-詳細な接続手順は [docs/connection-guide.md](docs/connection-guide.md) を参照してください。
-
 ## 開発
 
 ```bash
