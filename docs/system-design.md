@@ -178,6 +178,25 @@ ESP32開発ボード      Raspberry Pi 3/4
 
 ### 7.2 現在の進捗状況
 
-- **完了：** フェーズ1基本ブリッジ実装、UART通信確立
-- **進行中：** ESP-NOW機能実装準備
-- **次ステップ：** フェーズ2 ICSN処理移植
+- **完了：**
+  - フェーズ1基本ブリッジ実装
+  - UART通信確立
+  - ESP-NOW受信・送信機能実装
+  - 循環バッファによるパケットキューイング
+  - Base64エンコード/デコード実装
+  - エコーバック問題解決
+- **次ステップ：**
+  - ESP-NOWセンサーノードとの通信テスト
+  - フェーズ2 ICSN処理移植（Raspberry Pi側）
+
+### 7.3 既知の問題と解決策
+
+#### UARTエコーバック問題
+**問題**: Raspberry PiのUARTポートでエコーバックが有効な場合、ESP32が自分の送信データを受信してしまう
+
+**解決策**:
+```bash
+sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+```
+
+詳細は [connection-guide.md](connection-guide.md) を参照
