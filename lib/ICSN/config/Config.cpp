@@ -45,8 +45,9 @@ bool loadSystemConfig(const char* path) {
   File file = LittleFS.open(path, "r");
   if (!file) return false;
 
-  StaticJsonDocument<1024> doc;
-  if (deserializeJson(doc, file)) return false;
+  StaticJsonDocument<2048> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  if (error) return false;
 
   // セキュリティ設定の読み込み
   const char* pmkStr = doc["PMK"] | "";

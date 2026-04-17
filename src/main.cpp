@@ -47,14 +47,14 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   // 設定ファイル読み込み
-  if (loadSystemConfig("/config.json")) {
-    if (systemConfig.encryptionEnabled) {
-      peerCounterManager.setGlobalLMK(systemConfig.lmk);
-      for (size_t i = 0; i < systemConfig.peerLmkCount; i++) {
-        const PeerLMKConfig& entry = systemConfig.peerLmkEntries[i];
-        if (entry.valid) {
-          peerCounterManager.setPeerLMK(entry.mac, entry.lmk);
-        }
+  if (!loadSystemConfig("/config.json")) {
+    Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
+  } else if (systemConfig.encryptionEnabled) {
+    peerCounterManager.setGlobalLMK(systemConfig.lmk);
+    for (size_t i = 0; i < systemConfig.peerLmkCount; i++) {
+      const PeerLMKConfig& entry = systemConfig.peerLmkEntries[i];
+      if (entry.valid) {
+        peerCounterManager.setPeerLMK(entry.mac, entry.lmk);
       }
     }
   }
