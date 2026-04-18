@@ -155,16 +155,13 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
 
   // ユニキャストパケットにHMAC・カウンタ検証を適用（暗号化が有効な場合）
   if (systemConfig.encryptionEnabled && len == (int)sizeof(CommunicationData)) {
-    // 送信元がブロードキャストアドレスでなければユニキャストとして扱う
-    bool isBcast = true;
-    for (int i = 0; i < 6; i++) {
-      if (mac[i] != 0xFF) { isBcast = false; break; }
-    }
+    CommunicationData pkt;
+    memcpy(&pkt, data, sizeof(CommunicationData));
 
-    if (!isBcast) {
-      CommunicationData pkt;
-      memcpy(&pkt, data, sizeof(CommunicationData));
-
+    // ブロードキャストフラグが立っていない場合のみHMAC・カウンタ検証を実施
+    // （ブロードキャストパケットは送信元MACがユニキャストアドレスのため、
+    //  送信元MACではブロードキャスト判定できないのでペイロードのflagsで判定する）
+    if (!(pkt.flags & COMM_FLAG_BROADCAST)) {
       // HMAC検証
       if (!peerCounterManager.verifyHMAC(mac,
             reinterpret_cast<const uint8_t*>(&pkt),
@@ -236,13 +233,21 @@ void handleUARTCommand(String cmd) {
 
     // ユニキャスト送信時にカウンタ・HMACを付与（暗号化が有効かつCommunicationDataサイズの場合）
     if (systemConfig.encryptionEnabled && decoded_len == sizeof(CommunicationData)) {
+      CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
+
       bool isBcast = true;
       for (int i = 0; i < 6; i++) {
         if (peer_mac[i] != 0xFF) { isBcast = false; break; }
       }
 
-      if (!isBcast) {
-        CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
+      if (isBcast) {
+        // ブロードキャスト送信: flagsにブロードキャストフラグを設定し、HMAC/カウンタは付与しない
+        // 受信側はこのフラグを見てHMAC検証をスキップする
+        pkt->flags = COMM_FLAG_BROADCAST;
+        memset(pkt->hmac, 0, sizeof(pkt->hmac));
+      } else {
+        // ユニキャスト送信: flagsをクリアしてカウンタ・HMACを付与
+        pkt->flags = 0;
 
         bool counterOk = false;
         pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
