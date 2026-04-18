@@ -65,6 +65,14 @@ ERR:DECODE_FAIL\n       # Base64デコード失敗
 ERR:SEND_FAIL\n         # ESP-NOW送信失敗
 ```
 
+## ドキュメント
+
+| ドキュメント | 内容 |
+|---|---|
+| [UART 接続ガイド](docs/connection-guide.md) | ESP32 と Raspberry Pi の UART 接続設定 |
+| [Raspberry Pi 5 動作確認手順](docs/raspberry-pi-5/README.md) | Raspberry Pi 5 固有の設定・接続・動作確認 |
+| [トラブルシューティング](docs/troubleshooting.md) | よくある問題と解決方法 |
+
 ## 開発
 
 ```bash
