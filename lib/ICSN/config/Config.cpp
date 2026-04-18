@@ -45,7 +45,7 @@ bool loadSystemConfig(const char* path) {
   File file = LittleFS.open(path, "r");
   if (!file) return false;
 
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<4096> doc;
   DeserializationError error = deserializeJson(doc, file);
   if (error) return false;
 
@@ -81,5 +81,44 @@ bool loadSystemConfig(const char* path) {
     }
   }
 
+  // FIB設定の読み込み
+  systemConfig.fibCount = 0;
+  memset(systemConfig.fibEntries, 0, sizeof(systemConfig.fibEntries));
+
+  if (doc.containsKey("fib")) {
+    JsonArray fib = doc["fib"].as<JsonArray>();
+    for (JsonObject entry : fib) {
+      if (systemConfig.fibCount >= MAX_FIB_ENTRIES) break;
+
+      const char* prefix  = entry["prefix"]  | "";
+      const char* nextHop = entry["nextHop"] | "";
+
+      FibEntry& fibEntry = systemConfig.fibEntries[systemConfig.fibCount];
+      if (strlen(prefix) > 0 && macStringToBytes(nextHop, fibEntry.nextHopMac)) {
+        strncpy(fibEntry.prefix, prefix, CONFIG_MAX_CONTENT_NAME_LENGTH - 1);
+        fibEntry.prefix[CONFIG_MAX_CONTENT_NAME_LENGTH - 1] = '\0';
+        fibEntry.valid = true;
+        systemConfig.fibCount++;
+      }
+    }
+  }
+
   return true;
+}
+
+const FibEntry* lookupFib(const char* contentName) {
+  if (contentName == nullptr) return nullptr;
+  // 最長プレフィックスマッチ
+  const FibEntry* best = nullptr;
+  size_t bestLen = 0;
+  for (size_t i = 0; i < systemConfig.fibCount; i++) {
+    const FibEntry& e = systemConfig.fibEntries[i];
+    if (!e.valid) continue;
+    size_t prefLen = strlen(e.prefix);
+    if (strncmp(contentName, e.prefix, prefLen) == 0 && prefLen > bestLen) {
+      best    = &e;
+      bestLen = prefLen;
+    }
+  }
+  return best;
 }

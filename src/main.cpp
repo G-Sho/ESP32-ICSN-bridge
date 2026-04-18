@@ -47,8 +47,15 @@ void setup() {
   // WiFiをステーションモードに設定（ESP-NOW用）
   WiFi.mode(WIFI_STA);
 
-  // 設定ファイル読み込み
-  if (!loadSystemConfig("/config.json")) {
+  // 設定ファイル読み込み（TEST_CONFIG_PATHが定義されている場合はテスト用設定を使用）
+#ifdef TEST_CONFIG_PATH
+  const char* configPath = TEST_CONFIG_PATH;
+  Serial2.print("INFO:TEST_MODE_ENABLED\n");
+#else
+  const char* configPath = "/config.json";
+#endif
+
+  if (!loadSystemConfig(configPath)) {
     Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
   } else if (systemConfig.encryptionEnabled) {
     peerCounterManager.setGlobalLMK(systemConfig.lmk);
@@ -68,6 +75,19 @@ void setup() {
 
   // 受信コールバック登録
   esp_now_register_recv_cb(onESPNowReceive);
+
+  // FIBエントリに登録されたピアをESP-NOWピアテーブルに事前追加
+  for (size_t i = 0; i < systemConfig.fibCount; i++) {
+    const FibEntry& fib = systemConfig.fibEntries[i];
+    if (!fib.valid) continue;
+    if (!esp_now_is_peer_exist(fib.nextHopMac)) {
+      esp_now_peer_info_t peerInfo = {};
+      memcpy(peerInfo.peer_addr, fib.nextHopMac, 6);
+      peerInfo.channel = 0;
+      peerInfo.encrypt = false;
+      esp_now_add_peer(&peerInfo);
+    }
+  }
 
   Serial2.print("READY\n");
 }
@@ -224,12 +244,25 @@ void handleUARTCommand(String cmd) {
       return;
     }
 
-    // ピア追加（まだ登録されていない場合）
+    // ピア追加（FIBで次ホップが決定した後に登録）
     esp_now_peer_info_t peerInfo = {};
-    memcpy(peerInfo.peer_addr, peer_mac, 6);
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
 
+    // 宛先がブロードキャスト（FF:FF:FF:FF:FF:FF）の場合、FIBでコンテンツ名から次ホップを解決
+    static const uint8_t broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (memcmp(peer_mac, broadcastMac, 6) == 0 && decoded_len == sizeof(CommunicationData)) {
+      const CommunicationData* pkt = reinterpret_cast<const CommunicationData*>(decoded);
+      const FibEntry* fibEntry = lookupFib(pkt->contentName);
+      if (fibEntry != nullptr) {
+        memcpy(peer_mac, fibEntry->nextHopMac, 6);
+      } else {
+        Serial2.print("ERR:FIB_NO_ROUTE\n");
+        return;
+      }
+    }
+
+    memcpy(peerInfo.peer_addr, peer_mac, 6);
     if (!esp_now_is_peer_exist(peer_mac)) {
       esp_now_add_peer(&peerInfo);
     }
