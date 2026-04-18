@@ -39,6 +39,7 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
 void handleUARTCommand(String cmd);
 
 void setup() {
+  Serial.begin(115200);                        // デバッグ用シリアル出力
   Serial2.begin(115200, SERIAL_8N1, 16, 17);  // GPIO用: RX=GPIO16, TX=GPIO17
 
   delay(1000);
