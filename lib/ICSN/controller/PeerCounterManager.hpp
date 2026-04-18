@@ -89,7 +89,7 @@ public:
   bool setPeerLMK(const uint8_t mac[6], const uint8_t lmk[PEER_LMK_LEN]) {
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0) {
-      Serial2.println("[SECURITY] Peer slot exhaustion - cannot set LMK");
+      Serial.println("[SECURITY] Peer slot exhaustion - cannot set LMK");
       return false;
     }
     memcpy(peers[idx].lmk, lmk, PEER_LMK_LEN);
@@ -104,7 +104,7 @@ public:
   uint32_t incrementTxCounter(const uint8_t mac[6], bool &success) {
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0) {
-      Serial2.println("[SECURITY] Peer counter slot exhaustion on TX - cannot track counter");
+      Serial.println("[SECURITY] Peer counter slot exhaustion on TX - cannot track counter");
       success = false;
       return 0;
     }
@@ -120,7 +120,7 @@ public:
   bool validateRxCounter(const uint8_t mac[6], uint32_t received_counter) {
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0) {
-      Serial2.println("[SECURITY] Peer counter slot exhaustion on RX - rejecting packet");
+      Serial.println("[SECURITY] Peer counter slot exhaustion on RX - rejecting packet");
       return false;
     }
 
@@ -144,12 +144,12 @@ public:
                    uint8_t outHmac[HMAC_SHA256_LEN]) {
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0) {
-      Serial2.println("[SECURITY] Peer slot exhaustion on HMAC compute");
+      Serial.println("[SECURITY] Peer slot exhaustion on HMAC compute");
       return false;
     }
     const uint8_t* lmk = resolveLmk(idx);
     if (lmk == nullptr) {
-      Serial2.println("[SECURITY] LMK not set - cannot compute HMAC");
+      Serial.println("[SECURITY] LMK not set - cannot compute HMAC");
       return false;
     }
 
@@ -158,22 +158,22 @@ public:
     const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     if (mbedtls_md_setup(&ctx, info, 1) != 0) {
       mbedtls_md_free(&ctx);
-      Serial2.println("[SECURITY] mbedtls md_setup failed");
+      Serial.println("[SECURITY] mbedtls md_setup failed");
       return false;
     }
     if (mbedtls_md_hmac_starts(&ctx, lmk, PEER_LMK_LEN) != 0) {
       mbedtls_md_free(&ctx);
-      Serial2.println("[SECURITY] mbedtls hmac_starts failed");
+      Serial.println("[SECURITY] mbedtls hmac_starts failed");
       return false;
     }
     if (mbedtls_md_hmac_update(&ctx, data, dataLen) != 0) {
       mbedtls_md_free(&ctx);
-      Serial2.println("[SECURITY] mbedtls hmac_update failed");
+      Serial.println("[SECURITY] mbedtls hmac_update failed");
       return false;
     }
     if (mbedtls_md_hmac_finish(&ctx, outHmac) != 0) {
       mbedtls_md_free(&ctx);
-      Serial2.println("[SECURITY] mbedtls hmac_finish failed");
+      Serial.println("[SECURITY] mbedtls hmac_finish failed");
       return false;
     }
     mbedtls_md_free(&ctx);
@@ -201,12 +201,12 @@ public:
 
   /// @brief 全ピアのカウンタ状態を出力する
   void printCounters() const {
-    Serial2.println("[COUNTERS] === Peer Counter State ===");
+    Serial.println("[COUNTERS] === Peer Counter State ===");
     bool any = false;
     for (size_t i = 0; i < MAX_PEERS; i++) {
       if (!peers[i].active) continue;
       any = true;
-      Serial2.printf("[COUNTERS]  Peer %02d: %02X:%02X:%02X:%02X:%02X:%02X"
+      Serial.printf("[COUNTERS]  Peer %02d: %02X:%02X:%02X:%02X:%02X:%02X"
                     "  tx=%lu  rx=%lu  lmk=%s\n",
                     (int)i,
                     peers[i].peer_mac[0], peers[i].peer_mac[1],
@@ -216,7 +216,7 @@ public:
                     (unsigned long)peers[i].rx_counter,
                     peers[i].lmk_set ? "peer" : (globalLmkSet ? "global" : "NONE"));
     }
-    if (!any) Serial2.println("[COUNTERS]  (no active peers)");
-    Serial2.println("[COUNTERS] ============================");
+    if (!any) Serial.println("[COUNTERS]  (no active peers)");
+    Serial.println("[COUNTERS] ============================");
   }
 };
