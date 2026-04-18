@@ -3,6 +3,10 @@
 #include <WiFi.h>
 #include <mbedtls/base64.h>
 
+#include "config/Config.hpp"
+#include "controller/ESP-NOWControlData.hpp"
+#include "controller/PeerCounterManager.hpp"
+
 // 循環バッファ設定
 #define QUEUE_SIZE 4
 #define MAX_ESPNOW_SIZE 250
@@ -24,6 +28,9 @@ volatile uint32_t received_count = 0;
 volatile uint32_t dropped_count = 0;
 volatile uint32_t sent_count = 0;
 
+// セキュリティ管理
+PeerCounterManager peerCounterManager;
+
 // 関数プロトタイプ
 bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len);
 bool dequeuePacket(Packet *packet);
@@ -38,6 +45,19 @@ void setup() {
 
   // WiFiをステーションモードに設定（ESP-NOW用）
   WiFi.mode(WIFI_STA);
+
+  // 設定ファイル読み込み
+  if (!loadSystemConfig("/config.json")) {
+    Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
+  } else if (systemConfig.encryptionEnabled) {
+    peerCounterManager.setGlobalLMK(systemConfig.lmk);
+    for (size_t i = 0; i < systemConfig.peerLmkCount; i++) {
+      const PeerLMKConfig& entry = systemConfig.peerLmkEntries[i];
+      if (entry.valid) {
+        peerCounterManager.setPeerLMK(entry.mac, entry.lmk);
+      }
+    }
+  }
 
   // ESP-NOW初期化
   if (esp_now_init() != ESP_OK) {
@@ -132,6 +152,35 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
     return;
   }
 
+  // ユニキャストパケットにHMAC・カウンタ検証を適用（暗号化が有効な場合）
+  if (systemConfig.encryptionEnabled && len == (int)sizeof(CommunicationData)) {
+    // 送信元がブロードキャストアドレスでなければユニキャストとして扱う
+    bool isBcast = true;
+    for (int i = 0; i < 6; i++) {
+      if (mac[i] != 0xFF) { isBcast = false; break; }
+    }
+
+    if (!isBcast) {
+      CommunicationData pkt;
+      memcpy(&pkt, data, sizeof(CommunicationData));
+
+      // HMAC検証
+      if (!peerCounterManager.verifyHMAC(mac,
+            reinterpret_cast<const uint8_t*>(&pkt),
+            COMM_DATA_HMAC_DATA_LEN,
+            pkt.hmac)) {
+        dropped_count++;
+        return;
+      }
+
+      // カウンタ検証（リプレイ攻撃対策）
+      if (!peerCounterManager.validateRxCounter(mac, pkt.counter)) {
+        dropped_count++;
+        return;
+      }
+    }
+  }
+
   if (!enqueuePacket(mac, data, len)) {
     // キュー満杯でドロップ
     dropped_count++;
@@ -182,6 +231,34 @@ void handleUARTCommand(String cmd) {
 
     if (!esp_now_is_peer_exist(peer_mac)) {
       esp_now_add_peer(&peerInfo);
+    }
+
+    // ユニキャスト送信時にカウンタ・HMACを付与（暗号化が有効かつCommunicationDataサイズの場合）
+    if (systemConfig.encryptionEnabled && decoded_len == sizeof(CommunicationData)) {
+      bool isBcast = true;
+      for (int i = 0; i < 6; i++) {
+        if (peer_mac[i] != 0xFF) { isBcast = false; break; }
+      }
+
+      if (!isBcast) {
+        CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
+
+        bool counterOk = false;
+        pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
+        if (!counterOk) {
+          Serial2.print("ERR:COUNTER_FAIL\n");
+          return;
+        }
+
+        memset(pkt->hmac, 0, sizeof(pkt->hmac));
+        if (!peerCounterManager.computeHMAC(peer_mac,
+              reinterpret_cast<const uint8_t*>(pkt),
+              COMM_DATA_HMAC_DATA_LEN,
+              pkt->hmac)) {
+          Serial2.print("ERR:HMAC_FAIL\n");
+          return;
+        }
+      }
     }
 
     // ESP-NOW送信
