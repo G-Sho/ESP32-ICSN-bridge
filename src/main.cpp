@@ -6,6 +6,7 @@
 #include "config/Config.hpp"
 #include "controller/ESP-NOWControlData.hpp"
 #include "controller/PeerCounterManager.hpp"
+#include "performance.h"
 
 // 循環バッファ設定
 #define QUEUE_SIZE 4
@@ -187,12 +188,16 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   if (!enqueuePacket(mac, data, len)) {
     // キュー満杯でドロップ
     dropped_count++;
+  } else {
+    g_bridge_perf.recordDataRx();
   }
 }
 
 // UART経由の送信指示を処理
 void handleUARTCommand(String cmd) {
   if (cmd.startsWith("TX:")) {
+    g_bridge_perf.recordInterestRx();
+
     // TX:<宛先MAC>|<Base64データ>
     int separator = cmd.indexOf('|', 3);
 
@@ -246,6 +251,8 @@ void handleUARTCommand(String cmd) {
       if (!isBcast) {
         CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
 
+        g_bridge_perf.recordOtaStart();
+
         bool counterOk = false;
         pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
         if (!counterOk) {
@@ -261,6 +268,8 @@ void handleUARTCommand(String cmd) {
           Serial2.print("ERR:HMAC_FAIL\n");
           return;
         }
+
+        g_bridge_perf.recordOtaEnd();
       }
     }
 
@@ -268,6 +277,7 @@ void handleUARTCommand(String cmd) {
     esp_err_t result = esp_now_send(peer_mac, decoded, decoded_len);
 
     if (result == ESP_OK) {
+      g_bridge_perf.recordBridgeTx();
       Serial2.print("OK\n");
     } else {
       Serial2.print("ERR:SEND_FAIL\n");
@@ -280,6 +290,26 @@ void handleUARTCommand(String cmd) {
   }
   else if (cmd == "ping") {
     Serial2.print("pong\n");
+  }
+  else if (cmd == "dump_perf") {
+    // パフォーマンスバッファをJSON形式で出力
+    uint16_t count = g_bridge_perf.getCount();
+    Serial2.print("{\"bridge\":[");
+    for (uint16_t i = 0; i < count; i++) {
+      const BridgeMeasurement& e = g_bridge_perf.getEntry(i);
+      uint32_t ota_us = e.ota_end_us - e.ota_start_us;
+      uint32_t rt_us  = e.data_rx_us - e.interest_rx_us;
+      if (i > 0) Serial2.print(",");
+      Serial2.printf("{\"i\":%u,\"ota_us\":%u,\"rt_us\":%u}", i, ota_us, rt_us);
+    }
+    Serial2.print("]}\n");
+  }
+  else if (cmd == "reset_perf") {
+    g_bridge_perf.reset();
+    Serial2.print("{\"status\":\"perf_reset\"}\n");
+  }
+  else if (cmd == "perf_count") {
+    Serial2.printf("{\"count\":%u}\n", g_bridge_perf.getCount());
   }
   else {
     Serial2.print("ERR:UNKNOWN_CMD\n");
