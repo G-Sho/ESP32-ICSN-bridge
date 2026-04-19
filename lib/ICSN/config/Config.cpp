@@ -45,7 +45,7 @@ bool loadSystemConfig(const char* path) {
   File file = LittleFS.open(path, "r");
   if (!file) return false;
 
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<4096> doc;
   DeserializationError error = deserializeJson(doc, file);
   if (error) return false;
 

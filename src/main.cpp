@@ -48,7 +48,9 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   // 設定ファイル読み込み
-  if (!loadSystemConfig("/config.json")) {
+  const char* configPath = "/config.json";
+
+  if (!loadSystemConfig(configPath)) {
     Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
   } else if (systemConfig.encryptionEnabled) {
     peerCounterManager.setGlobalLMK(systemConfig.lmk);
@@ -224,12 +226,12 @@ void handleUARTCommand(String cmd) {
       return;
     }
 
-    // ピア追加（まだ登録されていない場合）
+    // ピア追加
     esp_now_peer_info_t peerInfo = {};
-    memcpy(peerInfo.peer_addr, peer_mac, 6);
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
 
+    memcpy(peerInfo.peer_addr, peer_mac, 6);
     if (!esp_now_is_peer_exist(peer_mac)) {
       esp_now_add_peer(&peerInfo);
     }
