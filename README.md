@@ -112,37 +112,12 @@ pio device monitor
     { "mac": "CC:7B:5C:9A:F3:C4", "lmk": "<sensor(A)向けLMK>" },
     { "mac": "CC:7B:5C:9A:F3:AC", "lmk": "<sensor(B)向けLMK>" },
     { "mac": "9C:9C:1F:CF:F4:8C", "lmk": "<sensor(C)向けLMK>" }
-  ],
-  "fib": [
-    { "prefix": "/", "nextHop": "CC:7B:5C:9A:F3:C4" }
   ]
 }
 ```
 
 > **注意**: PMK/LMK はすべて 32文字の16進数文字列（16バイト分）で指定します。  
 > 例: `"0123456789abcdef0123456789abcdef"`（ダミー値）
-
-### FIB（転送情報ベース）設定
-
-`fib` 配列でコンテンツ名プレフィックス→次ホップMACのマッピングを定義します。
-
-- `"prefix": "/"` → 全コンテンツをsensor(A)へ転送（デフォルトルート）
-- 特定コンテンツ名を優先させたい場合は長いプレフィックスを追加してください（最長マッチ）。
-
-#### FIBを使ったコンテンツベースルーティング
-
-UARTコマンドで宛先MACを `FF:FF:FF:FF:FF:FF`（ブロードキャスト）にすると、  
-パケット内の `contentName` フィールドをFIBで検索して次ホップMACを自動解決します。
-
-```
-TX:FF:FF:FF:FF:FF:FF|<Base64エンコードCommunicationData>
-```
-
-宛先MACを明示する従来の方式も引き続き使用可能です。
-
-```
-TX:CC:7B:5C:9A:F3:C4|<Base64エンコードデータ>
-```
 
 ### ビルドとフラッシュ（テスト環境）
 
@@ -190,14 +165,13 @@ sensor(C) (9C:9C:1F:CF:F4:8C)
    ping
    ```
 
-3. **FIBルート確認（コンテンツベース転送）**  
-   ゲートウェイからブロードキャスト宛てにコンテンツ名を含むパケットを送信し、  
-   sensor(A) がそのパケットを受信することを確認します。
+3. **往路疎通確認（ゲートウェイ→センサ）**  
+   ゲートウェイからsensor(A)へ明示的に宛先MACを指定してパケットを送信します。
    ```
-   TX:FF:FF:FF:FF:FF:FF|<Base64エンコードCommunicationData with contentName="/test">
+   TX:CC:7B:5C:9A:F3:C4|<Base64エンコードデータ>
    ```
 
-4. **往路疎通確認（センサ→ゲートウェイ）**  
+4. **復路疎通確認（センサ→ゲートウェイ）**  
    sensor(C) → sensor(B) → sensor(A) → bridge → gateway の順でパケットが転送されることを確認します。  
    ブリッジのシリアルで `RX:<MAC>|<len>|<Base64data>` が出力されることを確認します。
 
