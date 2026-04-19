@@ -86,10 +86,17 @@ void loop() {
   if (Serial2.available()) {
     String received = Serial2.readStringUntil('\n');
     received.trim();
-
-    // 空のコマンドは無視
     if (received.length() > 0) {
       handleUARTCommand(received);
+    }
+  }
+
+  // PCシリアルモニタからのコマンド（perf確認用）
+  if (Serial.available() > 0) {
+    String msg = Serial.readStringUntil('\n');
+    msg.trim();
+    if (msg.length() > 0) {
+      handleUARTCommand(msg);
     }
   }
 
@@ -142,7 +149,7 @@ void sendPacketToUART(const Packet *packet) {
                         packet->data, packet->len);
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
-  // Serial.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
+  Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
 
   sent_count++;
 }
@@ -278,7 +285,7 @@ void handleUARTCommand(String cmd) {
 
     if (result == ESP_OK) {
       g_bridge_perf.recordBridgeTx();
-      // Serial.print("OK\n");
+      Serial2.print("OK\n");
     } else {
       Serial.print("ERR:SEND_FAIL\n");
     }
