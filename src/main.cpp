@@ -52,7 +52,7 @@ void setup() {
   const char* configPath = "/config.json";
 
   if (!loadSystemConfig(configPath)) {
-    Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
+    Serial.print("WARN:CONFIG_LOAD_FAIL\n");
   } else if (systemConfig.encryptionEnabled) {
     peerCounterManager.setGlobalLMK(systemConfig.lmk);
     for (size_t i = 0; i < systemConfig.peerLmkCount; i++) {
@@ -65,14 +65,14 @@ void setup() {
 
   // ESP-NOW初期化
   if (esp_now_init() != ESP_OK) {
-    Serial2.print("ERR:ESPNOW_INIT_FAIL\n");
+    Serial.print("ERR:ESPNOW_INIT_FAIL\n");
     return;
   }
 
   // 受信コールバック登録
   esp_now_register_recv_cb(onESPNowReceive);
 
-  Serial2.print("READY\n");
+  Serial.print("READY\n");
 }
 
 void loop() {
@@ -142,7 +142,7 @@ void sendPacketToUART(const Packet *packet) {
                         packet->data, packet->len);
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
-  Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
+  Serial.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
 
   sent_count++;
 }
@@ -202,7 +202,7 @@ void handleUARTCommand(String cmd) {
     int separator = cmd.indexOf('|', 3);
 
     if (separator == -1) {
-      Serial2.print("ERR:INVALID_FORMAT\n");
+      Serial.print("ERR:INVALID_FORMAT\n");
       return;
     }
 
@@ -214,7 +214,7 @@ void handleUARTCommand(String cmd) {
     if (sscanf(mac_str.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &peer_mac[0], &peer_mac[1], &peer_mac[2],
                &peer_mac[3], &peer_mac[4], &peer_mac[5]) != 6) {
-      Serial2.print("ERR:INVALID_MAC\n");
+      Serial.print("ERR:INVALID_MAC\n");
       return;
     }
 
@@ -227,7 +227,7 @@ void handleUARTCommand(String cmd) {
                                      encoded_data.length());
 
     if (ret != 0 || decoded_len == 0) {
-      Serial2.print("ERR:DECODE_FAIL\n");
+      Serial.print("ERR:DECODE_FAIL\n");
       return;
     }
 
@@ -256,7 +256,7 @@ void handleUARTCommand(String cmd) {
         bool counterOk = false;
         pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
         if (!counterOk) {
-          Serial2.print("ERR:COUNTER_FAIL\n");
+          Serial.print("ERR:COUNTER_FAIL\n");
           return;
         }
 
@@ -265,7 +265,7 @@ void handleUARTCommand(String cmd) {
               reinterpret_cast<const uint8_t*>(pkt),
               COMM_DATA_HMAC_DATA_LEN,
               pkt->hmac)) {
-          Serial2.print("ERR:HMAC_FAIL\n");
+          Serial.print("ERR:HMAC_FAIL\n");
           return;
         }
 
@@ -278,40 +278,40 @@ void handleUARTCommand(String cmd) {
 
     if (result == ESP_OK) {
       g_bridge_perf.recordBridgeTx();
-      Serial2.print("OK\n");
+      Serial.print("OK\n");
     } else {
-      Serial2.print("ERR:SEND_FAIL\n");
+      Serial.print("ERR:SEND_FAIL\n");
     }
   }
   else if (cmd == "STATS") {
     // 統計情報要求
-    Serial2.printf("RX:%u TX:%u DROP:%u\n",
+    Serial.printf("RX:%u TX:%u DROP:%u\n",
                    received_count, sent_count, dropped_count);
   }
   else if (cmd == "ping") {
-    Serial2.print("pong\n");
+    Serial.print("pong\n");
   }
   else if (cmd == "dump_perf") {
     // パフォーマンスバッファをJSON形式で出力
     uint16_t count = g_bridge_perf.getCount();
-    Serial2.print("{\"bridge\":[");
+    Serial.print("{\"bridge\":[");
     for (uint16_t i = 0; i < count; i++) {
       const BridgeMeasurement& e = g_bridge_perf.getEntry(i);
       uint32_t ota_us = e.ota_end_us - e.ota_start_us;
       uint32_t rt_us  = e.data_rx_us - e.interest_rx_us;
-      if (i > 0) Serial2.print(",");
-      Serial2.printf("{\"i\":%u,\"ota_us\":%u,\"rt_us\":%u}", i, ota_us, rt_us);
+      if (i > 0) Serial.print(",");
+      Serial.printf("{\"i\":%u,\"ota_us\":%u,\"rt_us\":%u}", i, ota_us, rt_us);
     }
-    Serial2.print("]}\n");
+    Serial.print("]}\n");
   }
   else if (cmd == "reset_perf") {
     g_bridge_perf.reset();
-    Serial2.print("{\"status\":\"perf_reset\"}\n");
+    Serial.print("{\"status\":\"perf_reset\"}\n");
   }
   else if (cmd == "perf_count") {
-    Serial2.printf("{\"count\":%u}\n", g_bridge_perf.getCount());
+    Serial.printf("{\"count\":%u}\n", g_bridge_perf.getCount());
   }
   else {
-    Serial2.print("ERR:UNKNOWN_CMD\n");
+    Serial.print("ERR:UNKNOWN_CMD\n");
   }
 }
