@@ -98,45 +98,18 @@ pio device monitor
 | sensor(B) | `CC:7B:5C:9A:F3:AC` | 第2中継ノード |
 | sensor(C) | `9C:9C:1F:CF:F4:8C` | 末端センサノード |
 
-### LMK設定方法
-
-`data/config.test.json.example` をコピーして `data/config.test.json` を作成し、各ノードの PMK/LMK を設定します。  
-**`data/config.test.json` は `.gitignore` で除外されているため、誤ってリポジトリにコミットされません。**  
-**LMK実値は `data/config.test.json` に書き込み、このファイルはリポジトリ管理外で保持してください。**
-
-```json
-{
-  "PMK": "<32文字の16進数文字列 (16バイト)>",
-  "LMK": "<32文字の16進数文字列 (16バイト)>",
-  "peers": [
-    { "mac": "CC:7B:5C:9A:F3:C4", "lmk": "<sensor(A)向けLMK>" },
-    { "mac": "CC:7B:5C:9A:F3:AC", "lmk": "<sensor(B)向けLMK>" },
-    { "mac": "9C:9C:1F:CF:F4:8C", "lmk": "<sensor(C)向けLMK>" }
-  ]
-}
-```
-
-> **注意**: PMK/LMK はすべて 32文字の16進数文字列（16バイト分）で指定します。  
-> 例: `"0123456789abcdef0123456789abcdef"`（ダミー値）
-
-### ビルドとフラッシュ（テスト環境）
+### ビルドとフラッシュ
 
 ```bash
-# テスト用設定ファイルを例からコピーしてLMK値を書き込む
-cp data/config.test.json.example data/config.test.json
-# data/config.test.json を編集してPMK/LMKを実際の値に書き換える
+# ビルド・アップロード
+pio run --target upload
 
-# テスト用設定ファイルをフラッシュ
-pio run -e esp32dev-test --target uploadfs
-
-# テスト用ファームウェアをビルド・アップロード
-pio run -e esp32dev-test --target upload
+# 設定ファイルをフラッシュ
+pio run --target uploadfs
 
 # シリアルモニターで動作確認
-pio device monitor -e esp32dev-test
+pio device monitor
 ```
-
-テストモードでは起動時に `INFO:TEST_MODE_ENABLED` がシリアル出力されます。
 
 ### 想定経路と簡易検証手順
 
@@ -157,7 +130,7 @@ sensor(C) (9C:9C:1F:CF:F4:8C)
 **検証手順**
 
 1. **ブリッジ起動確認**  
-   シリアルモニターで `READY` または `INFO:TEST_MODE_ENABLED` が出力されることを確認します。
+   シリアルモニターで `READY` が出力されることを確認します。
 
 2. **UART疎通確認（ping）**  
    ゲートウェイ（Raspberry Pi）から以下を送信し、`pong` が返ることを確認します。

@@ -6,6 +6,3 @@
 
 # Claude Code
 .claude
-
-# テスト用設定ファイル（実際のLMK値が含まれる可能性があるため除外）
-data/config.test.json

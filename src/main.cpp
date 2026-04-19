@@ -47,13 +47,8 @@ void setup() {
   // WiFiをステーションモードに設定（ESP-NOW用）
   WiFi.mode(WIFI_STA);
 
-  // 設定ファイル読み込み（TEST_CONFIG_PATHが定義されている場合はテスト用設定を使用）
-#ifdef TEST_CONFIG_PATH
-  const char* configPath = TEST_CONFIG_PATH;
-  Serial2.print("INFO:TEST_MODE_ENABLED\n");
-#else
+  // 設定ファイル読み込み
   const char* configPath = "/config.json";
-#endif
 
   if (!loadSystemConfig(configPath)) {
     Serial2.print("WARN:CONFIG_LOAD_FAIL\n");
