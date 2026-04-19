@@ -142,7 +142,7 @@ void sendPacketToUART(const Packet *packet) {
                         packet->data, packet->len);
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
-  Serial.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
+  // Serial.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
 
   sent_count++;
 }
@@ -278,7 +278,7 @@ void handleUARTCommand(String cmd) {
 
     if (result == ESP_OK) {
       g_bridge_perf.recordBridgeTx();
-      Serial.print("OK\n");
+      // Serial.print("OK\n");
     } else {
       Serial.print("ERR:SEND_FAIL\n");
     }
