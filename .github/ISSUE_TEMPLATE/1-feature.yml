@@ -1,0 +1,96 @@
+name: "機能追加・改善"
+description: "ESP32-ICSN ブリッジ向けの機能追加・改善・リファクタリング提案に使用します。"
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 対象領域
+      description: 主に変更対象となる領域を選択してください
+      options:
+        - ESP-NOW 受信処理
+        - UART 送受信処理
+        - コマンド/プロトコル (TX/RX/OK/ERR)
+        - config / data ファイル
+        - docs / build / ci
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 実現したい内容を簡潔に記述してください
+      placeholder: |
+        例）UART 経由で受けた TX コマンドのバリデーションを強化し、誤送信を防止する
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 背景と目的
+      description: いま対応が必要な理由、現状の課題、期待する効果を記述してください
+      placeholder: |
+        例）異常入力時に decode 失敗が増えており、運用時の切り分けが難しい
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容（実装案）
+      description: 想定する変更点を記述してください（必要なら疑似コード可）
+      placeholder: |
+        - コマンド入力を段階的に検証する
+        - エラー理由を ERR:* に明確に反映する
+        - 既存の RX/TX フォーマット互換性を維持する
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: 影響する通信経路や互換性を記述してください
+      placeholder: |
+        - Raspberry Pi 側実装への影響:
+        - 既存機器との互換性:
+        - ドキュメント更新要否:
+
+  - type: checkboxes
+    id: quality-check
+    attributes:
+      label: 品質観点
+      options:
+        - label: 既存の UART/ESP-NOW 通信フローを壊さないことを確認した
+        - label: エラー時のログ/応答仕様（ERR:*）への影響を確認した
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 受け入れ条件
+      description: 完了と判断できる条件をチェックリスト形式で記述してください
+      placeholder: |
+        - [ ] pio run が通る
+        - [ ] pio run --target upload で実機動作確認した
+        - [ ] 必要なドキュメント（README/docs）を更新した
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation-plan
+    attributes:
+      label: 検証手順
+      description: 想定する確認手順を記述してください
+      placeholder: |
+        例）
+        1. pio run
+        2. pio device monitor で READY を確認
+        3. TX/RX コマンドを送って OK/ERR を確認
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 補足情報
+      description: 関連 Issue/PR、参考資料、ログ、スクリーンショット等

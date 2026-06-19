@@ -1,0 +1,110 @@
+name: "不具合報告"
+description: "ESP32-ICSN ブリッジの不具合や予期しない動作を報告する場合に使用します。"
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 影響度
+      options:
+        - critical (通信停止 / 起動不能)
+        - high (主要機能が大きく劣化)
+        - medium (回避策あり)
+        - low (軽微)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 発生領域
+      options:
+        - ESP-NOW 受信/送信
+        - UART 受信/送信
+        - コマンド/プロトコル (TX/RX/OK/ERR)
+        - Base64 エンコード/デコード
+        - build / CI / docs / その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 発生している事象を簡潔に記述してください
+      placeholder: |
+        例）TX コマンド送信時に ERR:DECODE_FAIL が継続して返る
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1. pio run --target upload を実行
+        2. pio device monitor で READY を確認
+        3. UART 経由で TX:<MAC>|<Base64> を送信
+        4. 想定と異なる応答を確認
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-and-actual
+    attributes:
+      label: 期待される動作と実際の動作
+      description: 本来あるべき動作と、実際に起きている動作を記述してください（ログやスクリーンショットも可）
+      placeholder: |
+        - 期待:
+        - 実際:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ / 出力
+      description: シリアルログ、CI ログ、エラーメッセージを貼り付けてください
+      placeholder: |
+        例）
+        READY
+        ERR:INVALID_MAC
+
+  - type: input
+    id: commit
+    attributes:
+      label: 対象コミット / ブランチ
+      placeholder: "例）main@abc1234 または fix/uart-parse"
+
+  - type: input
+    id: environment
+    attributes:
+      label: 環境
+      description: 例: OS / PlatformIO / board / 接続ポート / Raspberry Pi モデル
+      placeholder: "例）Windows 11 / PlatformIO 6.x / esp32dev / COM5 / Raspberry Pi 5"
+
+  - type: textarea
+    id: config-notes
+    attributes:
+      label: config.json 差分メモ
+      description: 再現に必要な設定差分のみ記載してください（秘密情報は貼らない）
+      placeholder: |
+        例）
+        - peers に 3 台登録
+        - UART ボーレート 115200
+        - PMK/LMK はマスクして記載
+
+  - type: checkboxes
+    id: pre-checks
+    attributes:
+      label: 事前確認
+      options:
+        - label: 最新 main でも再現することを確認した
+        - label: ローカルでビルド/書き込みを確認した
+        - label: PMK/LMK などの機密情報を投稿していない
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 補足情報
+      description: 関連ログ、再現頻度、回避策があれば記載してください
