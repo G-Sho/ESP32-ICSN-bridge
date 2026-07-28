@@ -38,6 +38,7 @@ bool dequeuePacket(Packet *packet);
 void sendPacketToUART(const Packet *packet);
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
 void handleUARTCommand(String cmd);
+static bool registerPeerIfNeeded(const uint8_t mac[6]);
 
 static bool isBroadcastMac(const uint8_t mac[6]) {
   for (int i = 0; i < 6; i++) {
@@ -63,6 +64,33 @@ static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW
   }
 
   return false;
+}
+
+static bool registerPeerIfNeeded(const uint8_t mac[6]) {
+  if (isBroadcastMac(mac)) {
+    return false;
+  }
+
+  if (esp_now_is_peer_exist(mac)) {
+    return true;
+  }
+
+  esp_now_peer_info_t peerInfo = {};
+  peerInfo.channel = 0;
+  peerInfo.ifidx = WIFI_IF_STA;
+  peerInfo.encrypt = false;
+  memcpy(peerInfo.peer_addr, mac, 6);
+
+  if (systemConfig.espNowSecurityEnabled) {
+    uint8_t peerLmk[ESP_NOW_LMK_LEN];
+    if (!resolveEspNowLmkForPeer(mac, peerLmk)) {
+      return false;
+    }
+    peerInfo.encrypt = true;
+    memcpy(peerInfo.lmk, peerLmk, ESP_NOW_LMK_LEN);
+  }
+
+  return esp_now_add_peer(&peerInfo) == ESP_OK;
 }
 
 void setup() {
@@ -101,6 +129,32 @@ void setup() {
     if (esp_now_set_pmk(systemConfig.pmk) != ESP_OK) {
       Serial.print("WARN:PMK_SET_FAIL\n");
     }
+  }
+
+  // 起動時に設定済みピアを一括登録する（センサノードと同様）
+  size_t peerRegisterAttempt = 0;
+  size_t peerRegisterSuccess = 0;
+  size_t peerRegisterFail = 0;
+  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++) {
+    const PeerKeyConfig& entry = systemConfig.espNowPeerKeys[i];
+    if (!entry.valid) {
+      continue;
+    }
+
+    peerRegisterAttempt++;
+    if (registerPeerIfNeeded(entry.mac)) {
+      peerRegisterSuccess++;
+    } else {
+      peerRegisterFail++;
+      Serial.printf("WARN:PEER_REG_FAIL_AT_BOOT:%02X:%02X:%02X:%02X:%02X:%02X\n",
+                    entry.mac[0], entry.mac[1], entry.mac[2],
+                    entry.mac[3], entry.mac[4], entry.mac[5]);
+    }
+  }
+  if (peerRegisterAttempt > 0) {
+    Serial.printf("INFO:PEER_REG_BOOT:OK=%u FAIL=%u\n",
+                  static_cast<unsigned>(peerRegisterSuccess),
+                  static_cast<unsigned>(peerRegisterFail));
   }
 
   // 受信コールバック登録
@@ -275,24 +329,10 @@ void handleUARTCommand(String cmd) {
       return;
     }
 
-    // ピア追加
-    esp_now_peer_info_t peerInfo = {};
-    peerInfo.channel = 0;
-    peerInfo.encrypt = false;
-
-    if (systemConfig.espNowSecurityEnabled) {
-      uint8_t peerLmk[ESP_NOW_LMK_LEN];
-      if (!resolveEspNowLmkForPeer(peer_mac, peerLmk)) {
-        Serial.print("ERR:PEER_LMK_NOT_FOUND\n");
-        return;
-      }
-      peerInfo.encrypt = true;
-      memcpy(peerInfo.lmk, peerLmk, ESP_NOW_LMK_LEN);
-    }
-
-    memcpy(peerInfo.peer_addr, peer_mac, 6);
-    if (!esp_now_is_peer_exist(peer_mac)) {
-      esp_now_add_peer(&peerInfo);
+    // 送信前にピア登録を保証する
+    if (!registerPeerIfNeeded(peer_mac)) {
+      Serial.print("ERR:PEER_REG_FAIL\n");
+      return;
     }
 
     // 送信時にカウンタ・HMACを付与（未登録ピアはデフォルト鍵で計算）
