@@ -39,6 +39,32 @@ void sendPacketToUART(const Packet *packet);
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
 void handleUARTCommand(String cmd);
 
+static bool isBroadcastMac(const uint8_t mac[6]) {
+  for (int i = 0; i < 6; i++) {
+    if (mac[i] != 0xFF) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW_LMK_LEN]) {
+  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++) {
+    const PeerKeyConfig& entry = systemConfig.espNowPeerKeys[i];
+    if (entry.valid && memcmp(entry.mac, mac, 6) == 0) {
+      memcpy(outLmk, entry.key, ESP_NOW_LMK_LEN);
+      return true;
+    }
+  }
+
+  if (systemConfig.espNowDefaultLmkConfigured) {
+    memcpy(outLmk, systemConfig.espNowDefaultLmk, ESP_NOW_LMK_LEN);
+    return true;
+  }
+
+  return false;
+}
+
 void setup() {
   Serial.begin(115200);                        // デバッグ用シリアル出力
   Serial2.begin(115200, SERIAL_8N1, 16, 17);  // GPIO用: RX=GPIO16, TX=GPIO17
@@ -53,12 +79,14 @@ void setup() {
 
   if (!loadSystemConfig(configPath)) {
     Serial.print("WARN:CONFIG_LOAD_FAIL\n");
-  } else if (systemConfig.encryptionEnabled) {
-    peerCounterManager.setGlobalLMK(systemConfig.lmk);
-    for (size_t i = 0; i < systemConfig.peerLmkCount; i++) {
-      const PeerLMKConfig& entry = systemConfig.peerLmkEntries[i];
+  } else if (systemConfig.hmacAuthenticationEnabled) {
+    if (systemConfig.hmacDefaultKeyConfigured) {
+      peerCounterManager.setGlobalLMK(systemConfig.hmacDefaultKey);
+    }
+    for (size_t i = 0; i < systemConfig.hmacPeerKeyCount; i++) {
+      const PeerKeyConfig& entry = systemConfig.hmacPeerKeys[i];
       if (entry.valid) {
-        peerCounterManager.setPeerLMK(entry.mac, entry.lmk);
+        peerCounterManager.setPeerLMK(entry.mac, entry.key);
       }
     }
   }
@@ -67,6 +95,12 @@ void setup() {
   if (esp_now_init() != ESP_OK) {
     Serial.print("ERR:ESPNOW_INIT_FAIL\n");
     return;
+  }
+
+  if (systemConfig.espNowSecurityEnabled) {
+    if (esp_now_set_pmk(systemConfig.pmk) != ESP_OK) {
+      Serial.print("WARN:PMK_SET_FAIL\n");
+    }
   }
 
   // 受信コールバック登録
@@ -158,37 +192,35 @@ void sendPacketToUART(const Packet *packet) {
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   received_count++;
 
+  // ブロードキャストは運用対象外のため常に破棄する
+  if (isBroadcastMac(mac)) {
+    dropped_count++;
+    return;
+  }
+
   if (len > MAX_ESPNOW_SIZE) {
     dropped_count++;
     return;
   }
 
-  // ユニキャストパケットにHMAC・カウンタ検証を適用（暗号化が有効な場合）
-  if (systemConfig.encryptionEnabled && len == (int)sizeof(CommunicationData)) {
-    // 送信元がブロードキャストアドレスでなければユニキャストとして扱う
-    bool isBcast = true;
-    for (int i = 0; i < 6; i++) {
-      if (mac[i] != 0xFF) { isBcast = false; break; }
+  // HMAC・カウンタ検証を適用（デフォルト鍵により未登録ピアも検証対象）
+  if (systemConfig.hmacAuthenticationEnabled && len == (int)sizeof(CommunicationData)) {
+    CommunicationData pkt;
+    memcpy(&pkt, data, sizeof(CommunicationData));
+
+    // HMAC検証
+    if (!peerCounterManager.verifyHMAC(mac,
+          reinterpret_cast<const uint8_t*>(&pkt),
+          COMM_DATA_HMAC_DATA_LEN,
+          pkt.hmac)) {
+      dropped_count++;
+      return;
     }
 
-    if (!isBcast) {
-      CommunicationData pkt;
-      memcpy(&pkt, data, sizeof(CommunicationData));
-
-      // HMAC検証
-      if (!peerCounterManager.verifyHMAC(mac,
-            reinterpret_cast<const uint8_t*>(&pkt),
-            COMM_DATA_HMAC_DATA_LEN,
-            pkt.hmac)) {
-        dropped_count++;
-        return;
-      }
-
-      // カウンタ検証（リプレイ攻撃対策）
-      if (!peerCounterManager.validateRxCounter(mac, pkt.counter)) {
-        dropped_count++;
-        return;
-      }
+    // カウンタ検証（リプレイ攻撃対策）
+    if (!peerCounterManager.validateRxCounter(mac, pkt.counter)) {
+      dropped_count++;
+      return;
     }
   }
 
@@ -225,6 +257,11 @@ void handleUARTCommand(String cmd) {
       return;
     }
 
+    if (isBroadcastMac(peer_mac)) {
+      Serial.print("ERR:BROADCAST_UNSUPPORTED\n");
+      return;
+    }
+
     // Base64デコード
     unsigned char decoded[MAX_ESPNOW_SIZE];
     size_t decoded_len = 0;
@@ -243,41 +280,44 @@ void handleUARTCommand(String cmd) {
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
 
+    if (systemConfig.espNowSecurityEnabled) {
+      uint8_t peerLmk[ESP_NOW_LMK_LEN];
+      if (!resolveEspNowLmkForPeer(peer_mac, peerLmk)) {
+        Serial.print("ERR:PEER_LMK_NOT_FOUND\n");
+        return;
+      }
+      peerInfo.encrypt = true;
+      memcpy(peerInfo.lmk, peerLmk, ESP_NOW_LMK_LEN);
+    }
+
     memcpy(peerInfo.peer_addr, peer_mac, 6);
     if (!esp_now_is_peer_exist(peer_mac)) {
       esp_now_add_peer(&peerInfo);
     }
 
-    // ユニキャスト送信時にカウンタ・HMACを付与（暗号化が有効かつCommunicationDataサイズの場合）
-    if (systemConfig.encryptionEnabled && decoded_len == sizeof(CommunicationData)) {
-      bool isBcast = true;
-      for (int i = 0; i < 6; i++) {
-        if (peer_mac[i] != 0xFF) { isBcast = false; break; }
+    // 送信時にカウンタ・HMACを付与（未登録ピアはデフォルト鍵で計算）
+    if (systemConfig.hmacAuthenticationEnabled && decoded_len == sizeof(CommunicationData)) {
+      CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
+
+      g_bridge_perf.recordOtaStart();
+
+      bool counterOk = false;
+      pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
+      if (!counterOk) {
+        Serial.print("ERR:COUNTER_FAIL\n");
+        return;
       }
 
-      if (!isBcast) {
-        CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
-
-        g_bridge_perf.recordOtaStart();
-
-        bool counterOk = false;
-        pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
-        if (!counterOk) {
-          Serial.print("ERR:COUNTER_FAIL\n");
-          return;
-        }
-
-        memset(pkt->hmac, 0, sizeof(pkt->hmac));
-        if (!peerCounterManager.computeHMAC(peer_mac,
-              reinterpret_cast<const uint8_t*>(pkt),
-              COMM_DATA_HMAC_DATA_LEN,
-              pkt->hmac)) {
-          Serial.print("ERR:HMAC_FAIL\n");
-          return;
-        }
-
-        g_bridge_perf.recordOtaEnd();
+      memset(pkt->hmac, 0, sizeof(pkt->hmac));
+      if (!peerCounterManager.computeHMAC(peer_mac,
+            reinterpret_cast<const uint8_t*>(pkt),
+            COMM_DATA_HMAC_DATA_LEN,
+            pkt->hmac)) {
+        Serial.print("ERR:HMAC_FAIL\n");
+        return;
       }
+
+      g_bridge_perf.recordOtaEnd();
     }
 
     // ESP-NOW送信

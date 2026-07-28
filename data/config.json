@@ -1,10 +1,23 @@
 {
-  "PMK": "0123456789abcdef0123456789abcdef",
-  "LMK": "fedcba9876543210fedcba9876543210",
-  "peers": [
-    {
-      "mac": "CC:7B:5C:9A:F3:C4",
-      "lmk": "aabbccddeeff00112233445566778899"
-    }
-  ]
+  "esp_now_security": {
+    "enabled": true,
+    "pmk": "0123456789abcdef0123456789abcdef",
+    "default_lmk": "fedcba9876543210fedcba9876543210",
+    "peers": [
+      {
+        "mac": "CC:7B:5C:9A:F3:C4",
+        "lmk": "aabbccddeeff00112233445566778899"
+      }
+    ]
+  },
+  "icsn_security": {
+    "hmac_enabled": true,
+    "default_hmac_key": "fedcba9876543210fedcba9876543210",
+    "peers": [
+      {
+        "mac": "CC:7B:5C:9A:F3:C4",
+        "hmac_key": "aabbccddeeff00112233445566778899"
+      }
+    ]
+  }
 }
