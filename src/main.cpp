@@ -39,6 +39,12 @@ void sendPacketToUART(const Packet *packet);
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
 void handleUARTCommand(String cmd);
 static bool registerPeerIfNeeded(const uint8_t mac[6]);
+static void formatMacString(const uint8_t mac[6], char out[18]);
+
+static void formatMacString(const uint8_t mac[6], char out[18]) {
+  snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
 
 static bool isBroadcastMac(const uint8_t mac[6]) {
   for (int i = 0; i < 6; i++) {
@@ -225,9 +231,7 @@ bool dequeuePacket(Packet *packet) {
 void sendPacketToUART(const Packet *packet) {
   // MACアドレスを16進数文字列に変換
   char mac_str[18];
-  snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
-           packet->mac[0], packet->mac[1], packet->mac[2],
-           packet->mac[3], packet->mac[4], packet->mac[5]);
+  formatMacString(packet->mac, mac_str);
 
   // データをBase64エンコード
   size_t encoded_len = 0;
@@ -238,6 +242,7 @@ void sendPacketToUART(const Packet *packet) {
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
   Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
+  Serial.printf("LOG:UART_TX_TO_GATEWAY:%s|%u|%s\n", mac_str, packet->len, encoded);
 
   sent_count++;
 }
@@ -246,14 +251,19 @@ void sendPacketToUART(const Packet *packet) {
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   received_count++;
 
+  char mac_str[18];
+  formatMacString(mac, mac_str);
+
   // ブロードキャストは運用対象外のため常に破棄する
   if (isBroadcastMac(mac)) {
     dropped_count++;
+    Serial.printf("LOG:ESPNOW_RX_DROP_BROADCAST:%s|%d\n", mac_str, len);
     return;
   }
 
   if (len > MAX_ESPNOW_SIZE) {
     dropped_count++;
+    Serial.printf("LOG:ESPNOW_RX_DROP_OVERSIZE:%s|%d\n", mac_str, len);
     return;
   }
 
@@ -268,12 +278,15 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
           COMM_DATA_HMAC_DATA_LEN,
           pkt.hmac)) {
       dropped_count++;
+      Serial.printf("LOG:ESPNOW_RX_DROP_HMAC:%s|%d\n", mac_str, len);
       return;
     }
 
     // カウンタ検証（リプレイ攻撃対策）
     if (!peerCounterManager.validateRxCounter(mac, pkt.counter)) {
       dropped_count++;
+      Serial.printf("LOG:ESPNOW_RX_DROP_COUNTER:%s|%lu\n", mac_str,
+                    static_cast<unsigned long>(pkt.counter));
       return;
     }
   }
@@ -281,7 +294,9 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
   if (!enqueuePacket(mac, data, len)) {
     // キュー満杯でドロップ
     dropped_count++;
+    Serial.printf("LOG:ESPNOW_RX_DROP_QUEUE_FULL:%s|%d\n", mac_str, len);
   } else {
+    Serial.printf("LOG:ESPNOW_RX_OK:%s|%d\n", mac_str, len);
     g_bridge_perf.recordDataRx();
   }
 }
@@ -329,6 +344,9 @@ void handleUARTCommand(String cmd) {
       return;
     }
 
+    Serial.printf("LOG:UART_RX_FROM_GATEWAY:%s|%u\n", mac_str.c_str(),
+                  static_cast<unsigned>(decoded_len));
+
     // 送信前にピア登録を保証する
     if (!registerPeerIfNeeded(peer_mac)) {
       Serial.print("ERR:PEER_REG_FAIL\n");
@@ -366,8 +384,10 @@ void handleUARTCommand(String cmd) {
     if (result == ESP_OK) {
       g_bridge_perf.recordBridgeTx();
       Serial2.print("OK\n");
+      Serial.printf("LOG:ESPNOW_TX_OK:%s|%u\n", mac_str.c_str(),
+                    static_cast<unsigned>(decoded_len));
     } else {
-      Serial.print("ERR:SEND_FAIL\n");
+      Serial.printf("ERR:SEND_FAIL:%d\n", static_cast<int>(result));
     }
   }
   else if (cmd == "STATS") {
