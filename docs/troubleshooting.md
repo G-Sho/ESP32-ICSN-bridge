@@ -1,125 +1,131 @@
 # トラブルシューティング
 
-## ESP32が自分の送信データを受信してしまう
+この文書は、現在の実装で発生し得る問題を短く整理した索引です。
 
-### 症状
-ESP32から送信した `READY` や `pong` などが再度ESP32に戻ってくる
+配線や基本設定は [connection-guide.md](connection-guide.md)、Pi 5 差分は [raspberry-pi-5/README.md](raspberry-pi-5/README.md) を参照してください。
 
-### 原因
-Raspberry PiのUARTポートでエコーバックが有効になっている
+## UART デバイスが見つからない
 
-### 解決方法
+確認:
 
 ```bash
-# 現在の設定を確認
-stty -F /dev/ttyAMA0 -a
-
-# echoが「-echo」になっていることを確認（マイナスが重要）
-# もし「echo」（マイナスなし）なら、エコーバックが有効
-
-# エコーバックを無効化
-sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
-
-# 完全な設定（推奨）
-sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+ls -l /dev/serial* /dev/ttyAMA*
 ```
 
-## 文字化けする場合
+対処:
 
-### 1. ボーレート確認
+- シリアルハードウェア有効化を再確認
+- `config.txt` のパスを世代別に確認（Pi3/4: `/boot/config.txt`, Pi5: `/boot/firmware/config.txt`）
 
-```bash
-stty -F /dev/ttyAMA0 115200
-```
+## UART で何も受信できない
 
-### 2. GPIO設定確認
-
-```bash
-gpio readall
-```
-
-GPIO14/15がALT0であることを確認
-
-### 3. 配線確認
-
-クロス接続されているか確認:
-- ESP32のTX → RaspberryPiのRX
-- ESP32のRX → RaspberryPiのTX
-
-## 何も受信しない場合
-
-### 1. ESP32の動作確認
+確認:
 
 ```bash
 pio device monitor
 ```
 
-### 2. システムサービス確認
+起動時に `READY` が出るか確認。
+
+追加確認:
 
 ```bash
 sudo systemctl status serial-getty@ttyAMA0.service
 ```
 
-無効になっていることを確認
+サービスが有効なら停止して再試行。
 
-### 3. ループバックテスト
+## TX/RX が逆になっている
 
-```bash
-# ラズパイのTX/RXピンを直接接続してテスト
-echo "test" | sudo tee /dev/ttyAMA0 &
-sudo cat /dev/ttyAMA0
-```
+配線を再確認:
 
-## UART設定が再起動後にリセットされる
+- ESP32 GPIO17(TX) -> Raspberry Pi GPIO15(RX)
+- ESP32 GPIO16(RX) <- Raspberry Pi GPIO14(TX)
 
-### 起動時に自動設定
+## ボーレートが一致しない
 
-#### 方法1: `/etc/rc.local` に追加
-
-`exit 0` の前に追加:
+本実装は 115200 固定（8N1）。
 
 ```bash
-stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
+stty -F /dev/ttyAMA0 115200
 ```
 
-#### 方法2: systemd サービスを作成（推奨）
-
-`/etc/systemd/system/uart-config.service`:
-
-```ini
-[Unit]
-Description=Configure UART settings
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
-
-[Install]
-WantedBy=multi-user.target
-```
-
-有効化:
+## エコーバックが有効
 
 ```bash
-sudo systemctl enable uart-config.service
-sudo systemctl start uart-config.service
+stty -F /dev/ttyAMA0 -a
+sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 ```
 
-## ESP-NOW通信が不安定
+## CONFIG_LOAD_FAIL が出る
 
-### Wi-Fiチャンネル確認
+症状:
 
-ESP-NOWとWi-Fiが同じチャンネルを使用しているか確認
+- `WARN:CONFIG_LOAD_FAIL`
 
-### 送信電力の調整
+確認:
 
-ESP32のWi-Fi送信電力を調整（main.cpp）:
+- `data/config.json` の JSON 構文
+- `pio run --target uploadfs` 実行済みか
+- キー文字列が 16 バイト（32 桁 hex）か
 
-```cpp
-esp_wifi_set_max_tx_power(84); // 最大送信電力に設定
+## ESP-NOW 初期化失敗
+
+症状:
+
+- `ERR:ESPNOW_INIT_FAIL`
+
+対処:
+
+- 電源再投入
+- ファーム再書き込み
+- Wi-Fi 初期化と同時利用機能の有無を確認
+
+## Base64 デコード失敗
+
+症状:
+
+- `ERR:DECODE_FAIL`
+
+原因候補:
+
+- `TX:<MAC>|<BASE64>` 形式の崩れ
+- Base64 文字列が空、または破損
+
+詳細フォーマットは [uart-protocol.md](uart-protocol.md) を参照。
+
+## ESP-NOW 送信失敗
+
+症状:
+
+- `ERR:SEND_FAIL:<code>`
+- `ERR:PEER_REG_FAIL`
+
+原因候補:
+
+- 宛先 MAC フォーマット誤り
+- ピア登録に必要な LMK 設定不足
+- 無線状態不安定
+
+## queue full による drop
+
+症状:
+
+- `LOG:ESPNOW_RX_DROP_QUEUE_FULL`
+
+背景:
+
+- 内部配列は 4 要素で、リングバッファの実効容量は最大 3 パケット
+
+対処:
+
+- 短時間にバースト送信しない
+- ゲートウェイ側処理遅延を減らす
+
+## 設定ファイルが LittleFS に反映されていない
+
+```bash
+pio run --target uploadfs
 ```
 
-### パケットロス確認
-
-デバッグ出力でドロップカウンタを確認
+再起動後の起動ログを再確認してください。

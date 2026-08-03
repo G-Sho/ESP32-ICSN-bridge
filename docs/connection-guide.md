@@ -1,55 +1,62 @@
-# ESP32-Raspberry Pi UART接続ガイド
+# ESP32-Raspberry Pi UART 接続ガイド
 
-## ハードウェア接続
+この文書は、ESP32-ICSN-bridge と Raspberry Pi を UART 接続するための共通手順です。
 
-### 物理配線
+Raspberry Pi 5 固有の差分は [raspberry-pi-5/README.md](raspberry-pi-5/README.md) を参照してください。
 
+## 1. 配線
+
+本実装は `Serial2.begin(115200, SERIAL_8N1, 16, 17)` を使用します。
+
+```text
+ESP32開発ボード          Raspberry Pi 3/4
+GPIO17 (TX)  ----------> GPIO15 (RX)  (物理Pin 10)
+GPIO16 (RX)  <---------- GPIO14 (TX)  (物理Pin 8)
+GND          ----------> GND          (物理Pin 6)
 ```
-ESP32開発ボード      Raspberry Pi 3/4
-┌─────────────┐      ┌─────────────┐
-│ GPIO17 (TX) │ ───► │ GPIO15 (RX) │ (Pin 10)
-│ GPIO16 (RX) │ ◄─── │ GPIO14 (TX) │ (Pin 8)
-│ GND         │ ───► │ GND         │ (Pin 6)
-└─────────────┘      └─────────────┘
-```
 
-**重要**: クロス接続が必要
-- ESP32のTX → RaspberryPiのRX
-- ESP32のRX → RaspberryPiのTX
+注意点:
 
-### 通信設定
+- 3.3V ロジック同士で接続する
+- TX/RX は交差接続にする
+- GND を必ず共通化する
 
-- **ボーレート**: 115200 bps
-- **データビット**: 8
-- **パリティ**: なし
-- **ストップビット**: 1
-- **フロー制御**: なし
+## 2. UART 設定
 
-## Raspberry Pi設定
+通信条件:
 
-### UART有効化
+- ボーレート: 115200
+- データビット: 8
+- パリティ: なし
+- ストップビット: 1
+- フロー制御: なし
+
+## 3. Raspberry Pi 3/4 基本設定
+
+`raspi-config` で UART を有効化します。
 
 ```bash
 sudo raspi-config
 ```
 
-1. `Interfacing Options` → `Serial Port`
-2. `Would you like a login shell to be accessible over serial?` → **No**
-3. `Would you like the serial port hardware to be enabled?` → **Yes**
+1. Interface Options -> Serial Port
+2. Login shell over serial -> No
+3. Serial hardware enabled -> Yes
 
-### 設定ファイル編集
+設定ファイル:
 
-#### `/boot/config.txt`に追加:
-```
+- `/boot/config.txt` に次を追加
+
+```ini
 enable_uart=1
 dtoverlay=disable-bt
 ```
 
-#### `/boot/cmdline.txt`から削除:
-- `console=serial0,115200`
-- `console=ttyAMA0,115200`
+- `/boot/cmdline.txt` から次を削除
+  - `console=serial0,115200`
+  - `console=ttyAMA0,115200`
 
-### システムサービス無効化
+シリアルログインサービス停止:
 
 ```bash
 sudo systemctl stop serial-getty@ttyAMA0.service
@@ -57,147 +64,50 @@ sudo systemctl disable serial-getty@ttyAMA0.service
 sudo systemctl disable hciuart
 ```
 
-### UART設定（エコーバック無効化）
+## 4. 疎通確認
 
-**重要**: Raspberry PiのUARTポートはデフォルトでエコーバックが有効になっています。これにより、ESP32が自分の送信データを受信してしまう問題が発生します。
-
-```bash
-# エコーバックを無効化（永続化しない場合）
-sudo stty -F /dev/ttyAMA0 -echo -echoe -echok
-
-# または完全な設定（推奨）
-sudo stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
-```
-
-**起動時に自動設定する場合**:
-
-`/etc/rc.local` に追加（`exit 0` の前に）:
-```bash
-stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
-```
-
-または systemd サービスを作成:
-
-`/etc/systemd/system/uart-config.service`:
-```ini
-[Unit]
-Description=Configure UART settings
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/stty -F /dev/ttyAMA0 115200 cs8 -cstopb -parenb -echo -echoe -echok -echoctl -echoke raw
-
-[Install]
-WantedBy=multi-user.target
-```
-
-有効化:
-```bash
-sudo systemctl enable uart-config.service
-sudo systemctl start uart-config.service
-```
-
-### 再起動
+### 4.1 ESP32 側
 
 ```bash
-sudo reboot
-```
-
-## GPIO設定確認
-
-```bash
-gpio readall
-```
-
-GPIO14/15が**ALT0**になっていることを確認
-
-## ESP32コード設定
-
-### main.cpp設定例
-
-```cpp
-#include <Arduino.h>
-
-void setup() {
-  Serial.begin(115200);    // USB用（デバッグ）
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);  // GPIO16/17用
-
-  Serial.println("ESP32 Debug: Started");
-  Serial2.println("ESP32 UART Bridge Test Started");
-}
-
-void loop() {
-  // ラズパイからの受信
-  if (Serial2.available()) {
-    String received = Serial2.readStringUntil('\n');
-    received.trim();
-
-    Serial2.print("ESP32 received: ");
-    Serial2.println(received);
-
-    if (received == "ping") {
-      Serial2.println("pong from ESP32");
-    }
-  }
-
-  // 定期的なheartbeat
-  static unsigned long lastHeartbeat = 0;
-  if (millis() - lastHeartbeat > 5000) {
-    Serial2.println("ESP32 heartbeat - system running");
-    lastHeartbeat = millis();
-  }
-
-  delay(100);
-}
-```
-
-## 動作確認
-
-### ESP32アップロード
-
-```bash
+pio run
 pio run --target upload
+pio run --target uploadfs
+pio device monitor
 ```
 
-### Raspberry Pi側テスト
+起動後に `READY` が出ることを確認します。
 
-#### 受信確認
+### 4.2 Raspberry Pi 側
+
+デバイス確認:
+
+```bash
+ls -l /dev/serial* /dev/ttyAMA*
+```
+
+受信確認:
+
 ```bash
 sudo cat /dev/ttyAMA0
 ```
 
-出力例:
-```
-ESP32 UART Bridge Test Started
-Ready for communication with Raspberry Pi
-ESP32 heartbeat - system running
-ESP32 heartbeat - system running
-```
+送信確認（例: ping）:
 
-#### 送信テスト
 ```bash
 echo "ping" | sudo tee /dev/ttyAMA0
 ```
 
-期待される応答:
-```
-ESP32 received: ping
-pong from ESP32
-```
+注意:
 
-#### 双方向通信テスト
-```bash
-echo "test" | sudo tee /dev/ttyAMA0
-```
+- `ping` の応答 `pong` は現行実装では `Serial` (USB) 側に出力されます
+- Raspberry Pi 側 UART で確認できる主な応答は `RX:<...>` と `OK` です
 
-期待される応答:
-```
-ESP32 received: test
-ESP32 echo: test
-```
+## 5. プロトコル確認
 
-## 参考情報
+UART 行フォーマット、応答コード、チャネル役割は [uart-protocol.md](uart-protocol.md) を参照してください。
 
-- ESP32 シリアル通信: [Arduino ESP32 Serial](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html)
-- Raspberry Pi UART: [RPi UART Communication](https://www.raspberrypi.org/documentation/configuration/uart.md)
+## 6. 既知の注意点
+
+- 実装上、送信成功 `OK` は `Serial2`、多くのエラーは `Serial` へ出力されます
+- エコーバックやシリアルコンソール設定が有効だと、期待通りに通信できない場合があります
+- 問題発生時は [troubleshooting.md](troubleshooting.md) を参照してください
