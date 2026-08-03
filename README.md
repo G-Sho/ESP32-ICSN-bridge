@@ -150,7 +150,7 @@ pio device monitor --port <PORT> --baud 115200
 
 - ブロードキャスト MAC (`FF:FF:FF:FF:FF:FF`) は受信時ドロップ、送信時は非対応
 - 受信キューは内部配列 4 要素、実効容量は最大 3 パケット
-- `pong`、`STATS`、エラーは `Serial` 側に出力される
+- `STATS`、エラーは `Serial` 側に出力される
 - 運用 UART (`Serial2`) の主応答は `RX:<...>` と `OK`
 - `Serial2` に診断ログは混在しない
 

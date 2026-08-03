@@ -602,11 +602,6 @@ void handleUARTCommand(String cmd)
     Serial.printf("RX:%u TX:%u DROP:%u\n",
                   received_count, sent_count, dropped_count);
   }
-  else if (cmd == "ping")
-  {
-    LOG_DEBUGF("UART", "command_received type=ping chars=%u", static_cast<unsigned>(cmd.length()));
-    Serial.print("pong\n");
-  }
   else
   {
     String cmdHead = cmd;

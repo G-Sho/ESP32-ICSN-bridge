@@ -91,15 +91,8 @@ ls -l /dev/serial* /dev/ttyAMA*
 sudo cat /dev/ttyAMA0
 ```
 
-送信確認（例: ping）:
-
-```bash
-echo "ping" | sudo tee /dev/ttyAMA0
-```
-
 注意:
 
-- `ping` の応答 `pong` は現行実装では `Serial` (USB) 側に出力されます
 - Raspberry Pi 側 UART で確認できる主な応答は `RX:<...>` と `OK` です
 
 ## 5. プロトコル確認

@@ -58,7 +58,6 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 
 - `TX:<DST_MAC>|<BASE64_PAYLOAD>`
 - `STATS`
-- `ping`
 
 ## 6. 応答コード
 
@@ -79,7 +78,6 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 - `ERR:SEND_FAIL:<esp_err_t>`
 - `ERR:UNKNOWN_CMD`
 - `RX:<count> TX:<count> DROP:<count>` (`STATS`)
-- `pong` (`ping`)
 
 注記: エラー出力は現在 `Serial` 側が中心です。`LOG:*` 診断ログはペイロード全文ではなく長さ中心で出力します。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
 
