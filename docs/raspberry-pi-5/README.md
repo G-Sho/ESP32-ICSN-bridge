@@ -1,263 +1,83 @@
-# Raspberry Pi 5 × ESP32 動作確認手順書
+# Raspberry Pi 5 差分ガイド
 
-本ドキュメントでは、**Raspberry Pi 5** と **ESP32**（本リポジトリの `ESP32-ICSN-bridge` ファーム）を UART 接続し、動作を確認するまでの手順を説明します。
+この文書は Raspberry Pi 5 固有の設定差分だけをまとめています。
 
----
+共通手順は [../connection-guide.md](../connection-guide.md) を参照してください。
 
-## 目次
+## Pi 3/4 との差分
 
-1. [事前準備](#1-事前準備)
-2. [配線（UART接続）](#2-配線uart接続)
-3. [Raspberry Pi 5 側：UART 有効化](#3-raspberry-pi-5-側uart-有効化)
-4. [ESP32 側：ファームのビルドとフラッシュ](#4-esp32-側ファームのビルドとフラッシュ)
-5. [最小疎通確認（minicom）](#5-最小疎通確認minicom)
-6. [本リポジトリ固有の動作確認](#6-本リポジトリ固有の動作確認)
-7. [トラブルシュート](#7-トラブルシュート)
+- `config.txt` の場所が `/boot/firmware/config.txt` になる
+- UART overlay は `dtoverlay=uart0` を使用する
+- 共通手順で使う配線、ボーレート、疎通確認コマンドは同じ
 
----
+## 1. UART 有効化
 
-## 1. 事前準備
-
-### 必要機材
-
-| 機材 | 備考 |
-|---|---|
-| Raspberry Pi 5 | OS: Raspberry Pi OS (64-bit) 推奨 |
-| ESP32 開発ボード | ESP32-DevKitC 等（本ファームは `esp32dev` ボード設定） |
-| ジャンパワイヤー（メス-メス） | 3本（TX/RX/GND） |
-| USB ケーブル（Type-A / Micro-USB または USB-C） | ESP32 の書き込み・USB 給電用 |
-| PC（Linux / macOS / Windows） | PlatformIO によるビルド・フラッシュ用 |
-
-### OS・ソフトウェア要件
-
-```bash
-# Raspberry Pi 5 側
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y minicom
-
-# PC 側（PlatformIO CLI）
-pip install platformio
-# または VSCode + PlatformIO 拡張機能を使用
-```
-
-### 電源・電圧の注意点
-
-> ⚠️ **重要**: Raspberry Pi 5 の GPIO は **3.3V ロジック** です。  
-> ESP32 開発ボードの UART ピンも 3.3V のため直結可能ですが、**5V には絶対に接続しないでください**。
-
-- ESP32 の電源は **USB 給電**（PCまたは USB 充電器）が最も安全です。
-- GND を必ず共通にしてください（電源を分けた場合も GND は接続する）。
-
----
-
-## 2. 配線（UART接続）
-
-### 物理配線
-
-本ファーム（`src/main.cpp`）では ESP32 の **Serial2** を使用します。
-
-```
-Serial2.begin(115200, SERIAL_8N1, 16, 17);
-// RX = GPIO16、TX = GPIO17
-```
-
-以下のように配線してください（TX/RX はクロス接続）。
-
-```
-ESP32 開発ボード          Raspberry Pi 5
-┌──────────────┐          ┌─────────────────┐
-│ GPIO17 (TX)  │ ───────► │ GPIO15 (RX)     │ (物理ピン 10)
-│ GPIO16 (RX)  │ ◄─────── │ GPIO14 (TX)     │ (物理ピン 8)
-│ GND          │ ───────► │ GND             │ (物理ピン 6 等)
-└──────────────┘          └─────────────────┘
-```
-
-> **ポイント**: ESP32 の TX → Pi の RX、ESP32 の RX → Pi の TX （交差接続）
-
-### Raspberry Pi 5 GPIO 番号参照
-
-```
- 3V3  (1) (2)  5V
- ...
- TXD  (8) (10) RXD    ← GPIO14(TX) と GPIO15(RX) を使用
- GND  (6) ...
-```
-
-物理ピン番号は `pinout` コマンドで確認できます。
-
-```bash
-pinout
-```
-
----
-
-## 3. Raspberry Pi 5 側：UART 有効化
-
-> ⚠️ **Raspberry Pi 5 の注意点**  
-> Pi 5 では設定ファイルのパスが変わっています。  
-> - Pi 4 以前: `/boot/config.txt`  
-> - **Pi 5: `/boot/firmware/config.txt`**
-
-### (1) `/boot/firmware/config.txt` の編集
+`/boot/firmware/config.txt` を編集:
 
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
 
-末尾に以下を追加します。
+末尾に追加:
 
 ```ini
-# UART0 を GPIO14/15 で有効化
 dtoverlay=uart0
 ```
 
-> **補足**: Pi 5 ではブルートゥースが RP1 チップ経由になったため、Pi 4 で必要だった `dtoverlay=disable-bt` は不要です。
+必要に応じて `/boot/firmware/cmdline.txt` から次を削除:
 
-### (2) シリアルコンソールの無効化
+- `console=serial0,115200`
+- `console=ttyAMA0,115200`
 
-UART がコンソールに使われていると ESP32 との通信が妨害されます。
+## 2. シリアルコンソール設定
 
 ```bash
-# raspi-config で無効化（推奨）
 sudo raspi-config
 ```
 
-1. `Interface Options` → `Serial Port`
-2. `Would you like a login shell to be accessible over serial?` → **No**
-3. `Would you like the serial port hardware to be enabled?` → **Yes**
-4. 設定後、**Finish** → **再起動を促されたらYes**
+1. Interface Options -> Serial Port
+2. Login shell over serial -> No
+3. Serial hardware enabled -> Yes
 
-または手動で `/boot/firmware/cmdline.txt` を編集し、以下の記述があれば**削除**します。
-
-```
-console=serial0,115200
-console=ttyAMA0,115200
-```
-
-### (3) 再起動
+再起動:
 
 ```bash
 sudo reboot
 ```
 
-### (4) UART デバイスの確認
-
-再起動後、以下のコマンドでデバイスを確認します。
+## 3. デバイス名確認
 
 ```bash
 ls -l /dev/serial* /dev/ttyAMA*
 ```
 
-期待される出力例（Pi 5 の場合）:
+一般的には `serial0 -> ttyAMA0` が確認できます。
 
-```
-lrwxrwxrwx 1 root root ... /dev/serial0 -> ttyAMA0
-crw-rw---- 1 root dialout ... /dev/ttyAMA0
-```
-
-`/dev/serial0` または `/dev/ttyAMA0` が存在すれば OK です。
+## 4. 権限設定
 
 ```bash
-# 自ユーザーを dialout グループに追加（sudo 不要でアクセス可能にする）
 sudo usermod -aG dialout $USER
-# 有効化のため再ログイン（またはnewgrpコマンドを使用）
 newgrp dialout
 ```
 
-### (5) シリアルサービスが停止していることを確認
+## 5. サービス状態確認
 
 ```bash
 sudo systemctl status serial-getty@ttyAMA0.service
 ```
 
-`Active: inactive (dead)` であることを確認します。有効な場合は無効化します。
+有効なら停止/無効化:
 
 ```bash
 sudo systemctl stop serial-getty@ttyAMA0.service
 sudo systemctl disable serial-getty@ttyAMA0.service
 ```
 
----
+## 6. 参照先
 
-## 4. ESP32 側：ファームのビルドとフラッシュ
-
-本リポジトリは **PlatformIO（Arduinoフレームワーク）** を使用しています。
-
-### (1) リポジトリのクローン（未実施の場合）
-
-```bash
-git clone https://github.com/G-Sho/ESP32-ICSN-bridge.git
-cd ESP32-ICSN-bridge
-```
-
-### (2) `platformio.ini` の確認
-
-```ini
-[env:esp32dev]
-platform = espressif32
-board = esp32dev
-framework = arduino
-upload_port = COM3       # ← 実際のポートに変更する
-monitor_port = COM3      # ← 実際のポートに変更する
-monitor_speed = 115200
-```
-
-> **Linux/Mac の場合**: `upload_port` と `monitor_port` を `/dev/ttyUSB0` や `/dev/ttyACM0` に変更してください。
-
-```bash
-# ポートの確認（ESP32 を USB 接続後）
-ls /dev/ttyUSB* /dev/ttyACM*
-```
-
-### (3) ビルドとフラッシュ
-
-```bash
-# ビルドのみ
-pio run
-
-# ビルド + フラッシュ
-pio run --target upload
-
-# フラッシュ後にシリアルモニター起動（デバッグ確認）
-pio device monitor
-```
-
-### (4) 設定ファイルのアップロード（必要な場合）
-
-本ファームは LittleFS を使用しており、`data/` フォルダの設定ファイルを別途アップロードします。
-
-```bash
-# ファイルシステムのビルドとアップロード
-pio run --target uploadfs
-```
-
-`data/` フォルダに `config.json` がある場合は内容を確認・編集してからアップロードしてください。設定ファイルがない場合、起動時に `WARN:CONFIG_LOAD_FAIL` が出力されますが、基本動作（UARTブリッジ）は継続します。
-
----
-
-## 5. 最小疎通確認（minicom）
-
-### (1) ESP32 の起動確認
-
-ESP32 のフラッシュが完了したら、USB シリアルモニター（または `pio device monitor`）で起動ログを確認します。
-
-正常起動時の期待ログ:
-
-```
-READY
-```
-
-`WARN:CONFIG_LOAD_FAIL` が表示されても UART 疎通確認は可能です。
-
-### (2) minicom のインストール
-
-```bash
-sudo apt install -y minicom
-```
-
-### (3) minicom の設定
-
-```bash
+- 接続と疎通確認: [../connection-guide.md](../connection-guide.md)
+- UART フォーマット: [../uart-protocol.md](../uart-protocol.md)
+- 問題発生時: [../troubleshooting.md](../troubleshooting.md)
 sudo minicom -s
 ```
 
