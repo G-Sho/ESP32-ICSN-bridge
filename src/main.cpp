@@ -6,14 +6,14 @@
 #include "config/Config.hpp"
 #include "controller/ESP-NOWControlData.hpp"
 #include "controller/PeerCounterManager.hpp"
-#include "performance.h"
 
 // 循環バッファ設定
 #define QUEUE_SIZE 4
 #define MAX_ESPNOW_SIZE 250
 
 // パケット構造体
-struct Packet {
+struct Packet
+{
   uint8_t mac[6];
   uint8_t data[MAX_ESPNOW_SIZE];
   uint8_t len;
@@ -41,30 +41,38 @@ void handleUARTCommand(String cmd);
 static bool registerPeerIfNeeded(const uint8_t mac[6]);
 static void formatMacString(const uint8_t mac[6], char out[18]);
 
-static void formatMacString(const uint8_t mac[6], char out[18]) {
+static void formatMacString(const uint8_t mac[6], char out[18])
+{
   snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-static bool isBroadcastMac(const uint8_t mac[6]) {
-  for (int i = 0; i < 6; i++) {
-    if (mac[i] != 0xFF) {
+static bool isBroadcastMac(const uint8_t mac[6])
+{
+  for (int i = 0; i < 6; i++)
+  {
+    if (mac[i] != 0xFF)
+    {
       return false;
     }
   }
   return true;
 }
 
-static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW_LMK_LEN]) {
-  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++) {
-    const PeerKeyConfig& entry = systemConfig.espNowPeerKeys[i];
-    if (entry.valid && memcmp(entry.mac, mac, 6) == 0) {
+static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW_LMK_LEN])
+{
+  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++)
+  {
+    const PeerKeyConfig &entry = systemConfig.espNowPeerKeys[i];
+    if (entry.valid && memcmp(entry.mac, mac, 6) == 0)
+    {
       memcpy(outLmk, entry.key, ESP_NOW_LMK_LEN);
       return true;
     }
   }
 
-  if (systemConfig.espNowDefaultLmkConfigured) {
+  if (systemConfig.espNowDefaultLmkConfigured)
+  {
     memcpy(outLmk, systemConfig.espNowDefaultLmk, ESP_NOW_LMK_LEN);
     return true;
   }
@@ -72,12 +80,15 @@ static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW
   return false;
 }
 
-static bool registerPeerIfNeeded(const uint8_t mac[6]) {
-  if (isBroadcastMac(mac)) {
+static bool registerPeerIfNeeded(const uint8_t mac[6])
+{
+  if (isBroadcastMac(mac))
+  {
     return false;
   }
 
-  if (esp_now_is_peer_exist(mac)) {
+  if (esp_now_is_peer_exist(mac))
+  {
     return true;
   }
 
@@ -87,9 +98,11 @@ static bool registerPeerIfNeeded(const uint8_t mac[6]) {
   peerInfo.encrypt = false;
   memcpy(peerInfo.peer_addr, mac, 6);
 
-  if (systemConfig.espNowSecurityEnabled) {
+  if (systemConfig.espNowSecurityEnabled)
+  {
     uint8_t peerLmk[ESP_NOW_LMK_LEN];
-    if (!resolveEspNowLmkForPeer(mac, peerLmk)) {
+    if (!resolveEspNowLmkForPeer(mac, peerLmk))
+    {
       return false;
     }
     peerInfo.encrypt = true;
@@ -99,9 +112,10 @@ static bool registerPeerIfNeeded(const uint8_t mac[6]) {
   return esp_now_add_peer(&peerInfo) == ESP_OK;
 }
 
-void setup() {
-  Serial.begin(115200);                        // デバッグ用シリアル出力
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);  // GPIO用: RX=GPIO16, TX=GPIO17
+void setup()
+{
+  Serial.begin(115200);                      // デバッグ用シリアル出力
+  Serial2.begin(115200, SERIAL_8N1, 16, 17); // GPIO用: RX=GPIO16, TX=GPIO17
 
   delay(1000);
 
@@ -109,30 +123,39 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   // 設定ファイル読み込み
-  const char* configPath = "/config.json";
+  const char *configPath = "/config.json";
 
-  if (!loadSystemConfig(configPath)) {
+  if (!loadSystemConfig(configPath))
+  {
     Serial.print("WARN:CONFIG_LOAD_FAIL\n");
-  } else if (systemConfig.hmacAuthenticationEnabled) {
-    if (systemConfig.hmacDefaultKeyConfigured) {
+  }
+  else if (systemConfig.hmacAuthenticationEnabled)
+  {
+    if (systemConfig.hmacDefaultKeyConfigured)
+    {
       peerCounterManager.setGlobalLMK(systemConfig.hmacDefaultKey);
     }
-    for (size_t i = 0; i < systemConfig.hmacPeerKeyCount; i++) {
-      const PeerKeyConfig& entry = systemConfig.hmacPeerKeys[i];
-      if (entry.valid) {
+    for (size_t i = 0; i < systemConfig.hmacPeerKeyCount; i++)
+    {
+      const PeerKeyConfig &entry = systemConfig.hmacPeerKeys[i];
+      if (entry.valid)
+      {
         peerCounterManager.setPeerLMK(entry.mac, entry.key);
       }
     }
   }
 
   // ESP-NOW初期化
-  if (esp_now_init() != ESP_OK) {
+  if (esp_now_init() != ESP_OK)
+  {
     Serial.print("ERR:ESPNOW_INIT_FAIL\n");
     return;
   }
 
-  if (systemConfig.espNowSecurityEnabled) {
-    if (esp_now_set_pmk(systemConfig.pmk) != ESP_OK) {
+  if (systemConfig.espNowSecurityEnabled)
+  {
+    if (esp_now_set_pmk(systemConfig.pmk) != ESP_OK)
+    {
       Serial.print("WARN:PMK_SET_FAIL\n");
     }
   }
@@ -141,23 +164,29 @@ void setup() {
   size_t peerRegisterAttempt = 0;
   size_t peerRegisterSuccess = 0;
   size_t peerRegisterFail = 0;
-  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++) {
-    const PeerKeyConfig& entry = systemConfig.espNowPeerKeys[i];
-    if (!entry.valid) {
+  for (size_t i = 0; i < systemConfig.espNowPeerKeyCount; i++)
+  {
+    const PeerKeyConfig &entry = systemConfig.espNowPeerKeys[i];
+    if (!entry.valid)
+    {
       continue;
     }
 
     peerRegisterAttempt++;
-    if (registerPeerIfNeeded(entry.mac)) {
+    if (registerPeerIfNeeded(entry.mac))
+    {
       peerRegisterSuccess++;
-    } else {
+    }
+    else
+    {
       peerRegisterFail++;
       Serial.printf("WARN:PEER_REG_FAIL_AT_BOOT:%02X:%02X:%02X:%02X:%02X:%02X\n",
                     entry.mac[0], entry.mac[1], entry.mac[2],
                     entry.mac[3], entry.mac[4], entry.mac[5]);
     }
   }
-  if (peerRegisterAttempt > 0) {
+  if (peerRegisterAttempt > 0)
+  {
     Serial.printf("INFO:PEER_REG_BOOT:OK=%u FAIL=%u\n",
                   static_cast<unsigned>(peerRegisterSuccess),
                   static_cast<unsigned>(peerRegisterFail));
@@ -169,27 +198,33 @@ void setup() {
   Serial.print("READY\n");
 }
 
-void loop() {
+void loop()
+{
   // キューからパケットを取り出してUART送信
   Packet packet;
-  if (dequeuePacket(&packet)) {
+  if (dequeuePacket(&packet))
+  {
     sendPacketToUART(&packet);
   }
 
   // ラズパイからの送信指示を受信
-  if (Serial2.available()) {
+  if (Serial2.available())
+  {
     String received = Serial2.readStringUntil('\n');
     received.trim();
-    if (received.length() > 0) {
+    if (received.length() > 0)
+    {
       handleUARTCommand(received);
     }
   }
 
-  // PCシリアルモニタからのコマンド（perf確認用）
-  if (Serial.available() > 0) {
+  // PCシリアルモニタからのコマンド
+  if (Serial.available() > 0)
+  {
     String msg = Serial.readStringUntil('\n');
     msg.trim();
-    if (msg.length() > 0) {
+    if (msg.length() > 0)
+    {
       handleUARTCommand(msg);
     }
   }
@@ -198,10 +233,12 @@ void loop() {
 }
 
 // 循環バッファにパケットを追加
-bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len) {
+bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len)
+{
   uint8_t next = (queue_head + 1) % QUEUE_SIZE;
 
-  if (next == queue_tail) {
+  if (next == queue_tail)
+  {
     // キュー満杯
     return false;
   }
@@ -215,8 +252,10 @@ bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len) {
 }
 
 // 循環バッファからパケットを取り出し
-bool dequeuePacket(Packet *packet) {
-  if (queue_tail == queue_head) {
+bool dequeuePacket(Packet *packet)
+{
+  if (queue_tail == queue_head)
+  {
     // キューが空
     return false;
   }
@@ -228,7 +267,8 @@ bool dequeuePacket(Packet *packet) {
 }
 
 // パケットをUART経由で送信
-void sendPacketToUART(const Packet *packet) {
+void sendPacketToUART(const Packet *packet)
+{
   // MACアドレスを16進数文字列に変換
   char mac_str[18];
   formatMacString(packet->mac, mac_str);
@@ -242,48 +282,54 @@ void sendPacketToUART(const Packet *packet) {
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
   Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
-  Serial.printf("LOG:UART_TX_TO_GATEWAY:%s|%u|%s\n", mac_str, packet->len, encoded);
+  Serial.printf("LOG:UART_TX_TO_GATEWAY:%s|%u\n", mac_str, packet->len);
 
   sent_count++;
 }
 
 // ESP-NOW受信コールバック
-void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
+void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len)
+{
   received_count++;
 
   char mac_str[18];
   formatMacString(mac, mac_str);
 
   // ブロードキャストは運用対象外のため常に破棄する
-  if (isBroadcastMac(mac)) {
+  if (isBroadcastMac(mac))
+  {
     dropped_count++;
     Serial.printf("LOG:ESPNOW_RX_DROP_BROADCAST:%s|%d\n", mac_str, len);
     return;
   }
 
-  if (len > MAX_ESPNOW_SIZE) {
+  if (len > MAX_ESPNOW_SIZE)
+  {
     dropped_count++;
     Serial.printf("LOG:ESPNOW_RX_DROP_OVERSIZE:%s|%d\n", mac_str, len);
     return;
   }
 
   // HMAC・カウンタ検証を適用（デフォルト鍵により未登録ピアも検証対象）
-  if (systemConfig.hmacAuthenticationEnabled && len == (int)sizeof(CommunicationData)) {
+  if (systemConfig.hmacAuthenticationEnabled && len == (int)sizeof(CommunicationData))
+  {
     CommunicationData pkt;
     memcpy(&pkt, data, sizeof(CommunicationData));
 
     // HMAC検証
     if (!peerCounterManager.verifyHMAC(mac,
-          reinterpret_cast<const uint8_t*>(&pkt),
-          COMM_DATA_HMAC_DATA_LEN,
-          pkt.hmac)) {
+                                       reinterpret_cast<const uint8_t *>(&pkt),
+                                       COMM_DATA_HMAC_DATA_LEN,
+                                       pkt.hmac))
+    {
       dropped_count++;
       Serial.printf("LOG:ESPNOW_RX_DROP_HMAC:%s|%d\n", mac_str, len);
       return;
     }
 
     // カウンタ検証（リプレイ攻撃対策）
-    if (!peerCounterManager.validateRxCounter(mac, pkt.counter)) {
+    if (!peerCounterManager.validateRxCounter(mac, pkt.counter))
+    {
       dropped_count++;
       Serial.printf("LOG:ESPNOW_RX_DROP_COUNTER:%s|%lu\n", mac_str,
                     static_cast<unsigned long>(pkt.counter));
@@ -291,25 +337,28 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len) {
     }
   }
 
-  if (!enqueuePacket(mac, data, len)) {
+  if (!enqueuePacket(mac, data, len))
+  {
     // キュー満杯でドロップ
     dropped_count++;
     Serial.printf("LOG:ESPNOW_RX_DROP_QUEUE_FULL:%s|%d\n", mac_str, len);
-  } else {
+  }
+  else
+  {
     Serial.printf("LOG:ESPNOW_RX_OK:%s|%d\n", mac_str, len);
-    g_bridge_perf.recordDataRx();
   }
 }
 
 // UART経由の送信指示を処理
-void handleUARTCommand(String cmd) {
-  if (cmd.startsWith("TX:")) {
-    g_bridge_perf.recordInterestRx();
-
+void handleUARTCommand(String cmd)
+{
+  if (cmd.startsWith("TX:"))
+  {
     // TX:<宛先MAC>|<Base64データ>
     int separator = cmd.indexOf('|', 3);
 
-    if (separator == -1) {
+    if (separator == -1)
+    {
       Serial.print("ERR:INVALID_FORMAT\n");
       return;
     }
@@ -321,12 +370,14 @@ void handleUARTCommand(String cmd) {
     uint8_t peer_mac[6];
     if (sscanf(mac_str.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &peer_mac[0], &peer_mac[1], &peer_mac[2],
-               &peer_mac[3], &peer_mac[4], &peer_mac[5]) != 6) {
+               &peer_mac[3], &peer_mac[4], &peer_mac[5]) != 6)
+    {
       Serial.print("ERR:INVALID_MAC\n");
       return;
     }
 
-    if (isBroadcastMac(peer_mac)) {
+    if (isBroadcastMac(peer_mac))
+    {
       Serial.print("ERR:BROADCAST_UNSUPPORTED\n");
       return;
     }
@@ -336,10 +387,11 @@ void handleUARTCommand(String cmd) {
     size_t decoded_len = 0;
 
     int ret = mbedtls_base64_decode(decoded, sizeof(decoded), &decoded_len,
-                                     (const unsigned char*)encoded_data.c_str(),
-                                     encoded_data.length());
+                                    (const unsigned char *)encoded_data.c_str(),
+                                    encoded_data.length());
 
-    if (ret != 0 || decoded_len == 0) {
+    if (ret != 0 || decoded_len == 0)
+    {
       Serial.print("ERR:DECODE_FAIL\n");
       return;
     }
@@ -348,77 +400,62 @@ void handleUARTCommand(String cmd) {
                   static_cast<unsigned>(decoded_len));
 
     // 送信前にピア登録を保証する
-    if (!registerPeerIfNeeded(peer_mac)) {
+    if (!registerPeerIfNeeded(peer_mac))
+    {
       Serial.print("ERR:PEER_REG_FAIL\n");
       return;
     }
 
     // 送信時にカウンタ・HMACを付与（未登録ピアはデフォルト鍵で計算）
-    if (systemConfig.hmacAuthenticationEnabled && decoded_len == sizeof(CommunicationData)) {
-      CommunicationData* pkt = reinterpret_cast<CommunicationData*>(decoded);
-
-      g_bridge_perf.recordOtaStart();
+    if (systemConfig.hmacAuthenticationEnabled && decoded_len == sizeof(CommunicationData))
+    {
+      CommunicationData *pkt = reinterpret_cast<CommunicationData *>(decoded);
 
       bool counterOk = false;
       pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
-      if (!counterOk) {
+      if (!counterOk)
+      {
         Serial.print("ERR:COUNTER_FAIL\n");
         return;
       }
 
       memset(pkt->hmac, 0, sizeof(pkt->hmac));
       if (!peerCounterManager.computeHMAC(peer_mac,
-            reinterpret_cast<const uint8_t*>(pkt),
-            COMM_DATA_HMAC_DATA_LEN,
-            pkt->hmac)) {
+                                          reinterpret_cast<const uint8_t *>(pkt),
+                                          COMM_DATA_HMAC_DATA_LEN,
+                                          pkt->hmac))
+      {
         Serial.print("ERR:HMAC_FAIL\n");
         return;
       }
-
-      g_bridge_perf.recordOtaEnd();
     }
 
     // ESP-NOW送信
     esp_err_t result = esp_now_send(peer_mac, decoded, decoded_len);
 
-    if (result == ESP_OK) {
-      g_bridge_perf.recordBridgeTx();
+    if (result == ESP_OK)
+    {
       Serial2.print("OK\n");
       Serial.printf("LOG:ESPNOW_TX_OK:%s|%u\n", mac_str.c_str(),
                     static_cast<unsigned>(decoded_len));
-    } else {
+    }
+    else
+    {
       Serial.printf("ERR:SEND_FAIL:%d\n", static_cast<int>(result));
     }
   }
-  else if (cmd == "STATS") {
+  else if (cmd == "STATS")
+  {
     // 統計情報要求
     Serial.printf("RX:%u TX:%u DROP:%u\n",
-                   received_count, sent_count, dropped_count);
+                  received_count, sent_count, dropped_count);
   }
-  else if (cmd == "ping") {
+  else if (cmd == "ping")
+  {
     Serial.print("pong\n");
   }
-  else if (cmd == "dump_perf") {
-    // パフォーマンスバッファをJSON形式で出力
-    uint16_t count = g_bridge_perf.getCount();
-    Serial.print("{\"bridge\":[");
-    for (uint16_t i = 0; i < count; i++) {
-      const BridgeMeasurement& e = g_bridge_perf.getEntry(i);
-      uint32_t ota_us = e.ota_end_us - e.ota_start_us;
-      uint32_t rt_us  = e.data_rx_us - e.interest_rx_us;
-      if (i > 0) Serial.print(",");
-      Serial.printf("{\"i\":%u,\"ota_us\":%u,\"rt_us\":%u}", i, ota_us, rt_us);
-    }
-    Serial.print("]}\n");
-  }
-  else if (cmd == "reset_perf") {
-    g_bridge_perf.reset();
-    Serial.print("{\"status\":\"perf_reset\"}\n");
-  }
-  else if (cmd == "perf_count") {
-    Serial.printf("{\"count\":%u}\n", g_bridge_perf.getCount());
-  }
-  else {
+  else
+  {
     Serial.print("ERR:UNKNOWN_CMD\n");
   }
 }

@@ -88,22 +88,6 @@ ICSN sensor node(s) <--ESP-NOW--> ESP32-ICSN-bridge <--UART--> Raspberry Pi gate
 - peer 設定の最大数は 20
 - サンプル鍵は開発用です。本番運用では必ず固有鍵に置き換えてください
 
-## 性能計測概要
-
-`src/performance.h` の `PerformanceBuffer` で次の時刻を記録します。
-
-- `interest_rx_us`
-- `ota_start_us`
-- `ota_end_us`
-- `bridge_tx_us`
-- `data_rx_us`
-
-利用コマンド（`Serial` 入力）:
-
-- `dump_perf`
-- `reset_perf`
-- `perf_count`
-
 ## 統計情報
 
 `STATS` コマンドの出力は次の意味です。
@@ -116,7 +100,7 @@ ICSN sensor node(s) <--ESP-NOW--> ESP32-ICSN-bridge <--UART--> Raspberry Pi gate
 
 ## ディレクトリ構成
 
-- [src](src): ブリッジ本体 (`main.cpp`, `performance.*`)
+- [src](src): ブリッジ本体 (`main.cpp`)
 - [lib/ICSN](lib/ICSN): 設定読み込み、HMAC/counter 管理、パケット定義
 - [data](data): LittleFS に書き込む設定ファイル
 - [docs](docs): 利用者向けドキュメント
@@ -149,7 +133,7 @@ pio device monitor --port <PORT> --baud 115200
 
 - ブロードキャスト MAC (`FF:FF:FF:FF:FF:FF`) は受信時ドロップ、送信時は非対応
 - 受信キューは内部配列 4 要素、実効容量は最大 3 パケット
-- `pong`、`STATS`、性能計測 JSON、エラーは `Serial` 側に出力される
+- `pong`、`STATS`、エラーは `Serial` 側に出力される
 - 運用 UART (`Serial2`) の主応答は `RX:<...>` と `OK`
 
 ## ドキュメント
