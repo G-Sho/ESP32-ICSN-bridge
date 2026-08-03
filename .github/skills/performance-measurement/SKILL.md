@@ -1,3 +1,8 @@
+---
+name: performance-measurement
+description: 性能計測バッファと計測時刻定義の整合性を維持するルールを定義する。
+---
+
 # Performance Measurement Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)

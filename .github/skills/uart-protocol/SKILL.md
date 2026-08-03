@@ -1,3 +1,8 @@
+---
+name: uart-protocol
+description: UART 行プロトコルの互換性ルールと応答チャネル規約を定義する。
+---
+
 # UART Protocol Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)

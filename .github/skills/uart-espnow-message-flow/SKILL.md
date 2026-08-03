@@ -1,3 +1,8 @@
+---
+name: uart-espnow-message-flow
+description: UART と ESP-NOW の双方向メッセージ処理順序と副作用管理を定義する。
+---
+
 # UART-ESP-NOW Message Flow Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)

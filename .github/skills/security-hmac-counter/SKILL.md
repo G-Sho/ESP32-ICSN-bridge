@@ -1,3 +1,8 @@
+---
+name: security-hmac-counter
+description: PMK/LMK と HMAC/counter の整合性を維持するための変更ルールを定義する。
+---
+
 # Security HMAC/Counter Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)

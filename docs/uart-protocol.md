@@ -87,13 +87,29 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 
 注記: エラー出力は現在 `Serial` 側が中心です。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
 
-## 7. データ長とペイロード
+## 7. 統計値の意味 (`STATS`)
+
+`STATS` は `Serial` 側へ次の形式で出力されます。
+
+```text
+RX:<count> TX:<count> DROP:<count>
+```
+
+各値の意味:
+
+- `RX`: ESP-NOW 受信 callback が呼ばれた回数
+- `TX`: ESP-NOW 受信データを UART (`Serial2`) へ転送した回数
+- `DROP`: ブロードキャスト、サイズ超過、HMAC失敗、counter失敗、queue full による破棄回数
+
+注記: `TX` は ESP-NOW 送信成功数ではありません。
+
+## 8. データ長とペイロード
 
 - ESP-NOW 最大長は 250 バイトに制限
 - Base64 デコード結果が 0 バイトなら `ERR:DECODE_FAIL`
 - HMAC/counter 処理は、デコード結果長が `sizeof(CommunicationData)` のときのみ適用
 
-## 8. 互換性ルール
+## 9. 互換性ルール
 
 - 行単位フレーミング (`\n`) は変更しない
 - `RX:` と `TX:` の基本フォーマットは変更しない

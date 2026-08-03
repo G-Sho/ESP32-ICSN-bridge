@@ -97,6 +97,11 @@ sudo cat /dev/ttyAMA0
 echo "ping" | sudo tee /dev/ttyAMA0
 ```
 
+注意:
+
+- `ping` の応答 `pong` は現行実装では `Serial` (USB) 側に出力されます
+- Raspberry Pi 側 UART で確認できる主な応答は `RX:<...>` と `OK` です
+
 ## 5. プロトコル確認
 
 UART 行フォーマット、応答コード、チャネル役割は [uart-protocol.md](uart-protocol.md) を参照してください。

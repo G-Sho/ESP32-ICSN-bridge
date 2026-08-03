@@ -1,3 +1,8 @@
+---
+name: platformio-operations
+description: PlatformIO のビルド、書き込み、検証手順を現行実装に沿って維持する。
+---
+
 # PlatformIO Operations Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)

@@ -115,7 +115,7 @@ sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 
 背景:
 
-- 受信キューは固定長 4 エントリ
+- 内部配列は 4 要素で、リングバッファの実効容量は最大 3 パケット
 
 対処:
 

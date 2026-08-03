@@ -1,3 +1,8 @@
+---
+name: overview
+description: ESP32-ICSN-bridge の共通前提、不変条件、変更時確認項目を定義する。
+---
+
 # Overview Skill
 
 ## 目的
@@ -17,7 +22,7 @@ ESP32-ICSN-bridge の実装変更時に共通で守る前提条件と不変条�
 - ESP-NOW 受信サイズ上限 250 バイトを維持
 - ブロードキャスト MAC は運用対象外として破棄
 - HMAC/counter は `CommunicationData` 長一致時のみ処理
-- 受信キュー容量は `QUEUE_SIZE=4` を前提に挙動を設計
+- 受信キューは内部配列 4 要素、実効容量は最大 3 パケットとして挙動を設計
 
 ## 実装方針
 

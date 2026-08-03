@@ -1,3 +1,8 @@
+---
+name: bridge-architecture
+description: ブリッジ責務境界と構成不変条件を定義し、役割混在を防ぐ。
+---
+
 # Bridge Architecture Skill
 
 参照元: [../overview/SKILL.md](../overview/SKILL.md)
