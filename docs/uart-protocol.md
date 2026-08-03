@@ -59,9 +59,6 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 - `TX:<DST_MAC>|<BASE64_PAYLOAD>`
 - `STATS`
 - `ping`
-- `dump_perf`
-- `reset_perf`
-- `perf_count`
 
 ## 6. 応答コード
 
@@ -83,9 +80,8 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 - `ERR:UNKNOWN_CMD`
 - `RX:<count> TX:<count> DROP:<count>` (`STATS`)
 - `pong` (`ping`)
-- `dump_perf` / `reset_perf` / `perf_count` の JSON
 
-注記: エラー出力は現在 `Serial` 側が中心です。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
+注記: エラー出力は現在 `Serial` 側が中心です。`LOG:*` 診断ログはペイロード全文ではなく長さ中心で出力します。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
 
 ## 7. 統計値の意味 (`STATS`)
 

@@ -11,7 +11,6 @@
 - [skills/uart-espnow-message-flow/SKILL.md](skills/uart-espnow-message-flow/SKILL.md)
 - [skills/uart-protocol/SKILL.md](skills/uart-protocol/SKILL.md)
 - [skills/security-hmac-counter/SKILL.md](skills/security-hmac-counter/SKILL.md)
-- [skills/performance-measurement/SKILL.md](skills/performance-measurement/SKILL.md)
 - [skills/platformio-operations/SKILL.md](skills/platformio-operations/SKILL.md)
 
 ## 共通ルール
@@ -30,7 +29,6 @@
 ## 一次ソース
 
 - `src/main.cpp`
-- `src/performance.h`
 - `platformio.ini`
 - `lib/ICSN/config/Config.hpp`
 - `lib/ICSN/config/Config.cpp`

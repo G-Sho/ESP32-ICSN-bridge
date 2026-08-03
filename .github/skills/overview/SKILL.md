@@ -40,7 +40,7 @@ ESP32-ICSN-bridge の実装変更時に共通で守る前提条件と不変条�
 
 - ビルドが通る (`pio run`)
 - UART 入出力フォーマットが維持される
-- `STATS`、`dump_perf`、`reset_perf`、`perf_count` の出力互換性を確認
+- `STATS` の出力互換性を確認
 - docs の相対リンクが有効
 
 ## 参照先
