@@ -60,6 +60,23 @@ ICSN sensor node(s) <--ESP-NOW--> ESP32-ICSN-bridge <--UART--> Raspberry Pi gate
 
 注記: 現在の実装では、送信成功応答 `OK` は `Serial2`、多くのエラーは `Serial` に出力されます。
 
+診断ログは `Serial` に対して次の形式で出力されます。
+
+```text
+[LEVEL][COMPONENT] event key=value
+```
+
+- LEVEL: `DEBUG` / `INFO` / `WARN`
+- COMPONENT: `APP`, `CFG`, `ESPNOW`, `UART`, `RX`, `TX`, `QUEUE`, `SEC`
+
+起動時ログ例:
+
+```text
+[INFO][APP] starting
+[INFO][ESPNOW] initialized
+[INFO][APP] ready
+```
+
 ## セキュリティ概要
 
 実装では 2 層のセキュリティを扱います。
@@ -135,6 +152,7 @@ pio device monitor --port <PORT> --baud 115200
 - 受信キューは内部配列 4 要素、実効容量は最大 3 パケット
 - `pong`、`STATS`、エラーは `Serial` 側に出力される
 - 運用 UART (`Serial2`) の主応答は `RX:<...>` と `OK`
+- `Serial2` に診断ログは混在しない
 
 ## ドキュメント
 

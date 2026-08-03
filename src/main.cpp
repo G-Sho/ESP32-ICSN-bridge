@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <mbedtls/base64.h>
 
+#include "BridgeLog.hpp"
 #include "config/Config.hpp"
 #include "controller/ESP-NOWControlData.hpp"
 #include "controller/PeerCounterManager.hpp"
@@ -10,6 +11,7 @@
 // 循環バッファ設定
 #define QUEUE_SIZE 4
 #define MAX_ESPNOW_SIZE 250
+#define QUEUE_CAPACITY (QUEUE_SIZE - 1)
 
 // パケット構造体
 struct Packet
@@ -37,9 +39,20 @@ bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len);
 bool dequeuePacket(Packet *packet);
 void sendPacketToUART(const Packet *packet);
 void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len);
+void onESPNowSend(const uint8_t *mac, esp_now_send_status_t status);
 void handleUARTCommand(String cmd);
 static bool registerPeerIfNeeded(const uint8_t mac[6]);
 static void formatMacString(const uint8_t mac[6], char out[18]);
+static uint8_t getQueueSize();
+
+static uint8_t getQueueSize()
+{
+  if (queue_head >= queue_tail)
+  {
+    return queue_head - queue_tail;
+  }
+  return QUEUE_SIZE - (queue_tail - queue_head);
+}
 
 static void formatMacString(const uint8_t mac[6], char out[18])
 {
@@ -82,13 +95,18 @@ static bool resolveEspNowLmkForPeer(const uint8_t mac[6], uint8_t outLmk[ESP_NOW
 
 static bool registerPeerIfNeeded(const uint8_t mac[6])
 {
+  char mac_str[18];
+  formatMacString(mac, mac_str);
+
   if (isBroadcastMac(mac))
   {
+    LOG_WARNF("ESPNOW", "peer_registration_failed reason=broadcast_unsupported peer=%s", mac_str);
     return false;
   }
 
   if (esp_now_is_peer_exist(mac))
   {
+    LOG_DEBUGF("ESPNOW", "peer_exists peer=%s", mac_str);
     return true;
   }
 
@@ -103,13 +121,24 @@ static bool registerPeerIfNeeded(const uint8_t mac[6])
     uint8_t peerLmk[ESP_NOW_LMK_LEN];
     if (!resolveEspNowLmkForPeer(mac, peerLmk))
     {
+      LOG_WARNF("ESPNOW", "peer_registration_failed reason=lmk_unresolved peer=%s", mac_str);
       return false;
     }
     peerInfo.encrypt = true;
     memcpy(peerInfo.lmk, peerLmk, ESP_NOW_LMK_LEN);
   }
 
-  return esp_now_add_peer(&peerInfo) == ESP_OK;
+  esp_err_t addResult = esp_now_add_peer(&peerInfo);
+  if (addResult != ESP_OK)
+  {
+    LOG_WARNF("ESPNOW", "peer_registration_failed reason=esp_now_add_peer_failed peer=%s error=%d",
+              mac_str,
+              static_cast<int>(addResult));
+    return false;
+  }
+
+  LOG_INFOF("ESPNOW", "peer_registered peer=%s", mac_str);
+  return true;
 }
 
 void setup()
@@ -118,6 +147,7 @@ void setup()
   Serial2.begin(115200, SERIAL_8N1, 16, 17); // GPIO用: RX=GPIO16, TX=GPIO17
 
   delay(1000);
+  LOG_INFOF("APP", "starting");
 
   // WiFiをステーションモードに設定（ESP-NOW用）
   WiFi.mode(WIFI_STA);
@@ -127,36 +157,53 @@ void setup()
 
   if (!loadSystemConfig(configPath))
   {
-    Serial.print("WARN:CONFIG_LOAD_FAIL\n");
+    LOG_WARNF("CFG", "config_load_failed path=%s reason=%s",
+              configPath,
+              configLoadErrorToReason(lastConfigLoadError));
   }
-  else if (systemConfig.hmacAuthenticationEnabled)
+  else
   {
-    if (systemConfig.hmacDefaultKeyConfigured)
+    LOG_INFOF("CFG",
+              "config_loaded path=%s encryption=%s peers=%u",
+              configPath,
+              systemConfig.espNowSecurityEnabled ? "enabled" : "disabled",
+              static_cast<unsigned>(systemConfig.espNowPeerKeyCount));
+    if (systemConfig.hmacAuthenticationEnabled)
     {
-      peerCounterManager.setGlobalLMK(systemConfig.hmacDefaultKey);
-    }
-    for (size_t i = 0; i < systemConfig.hmacPeerKeyCount; i++)
-    {
-      const PeerKeyConfig &entry = systemConfig.hmacPeerKeys[i];
-      if (entry.valid)
+      if (systemConfig.hmacDefaultKeyConfigured)
       {
-        peerCounterManager.setPeerLMK(entry.mac, entry.key);
+        peerCounterManager.setGlobalLMK(systemConfig.hmacDefaultKey);
+        LOG_INFOF("SEC", "global_key_configured");
+      }
+      for (size_t i = 0; i < systemConfig.hmacPeerKeyCount; i++)
+      {
+        const PeerKeyConfig &entry = systemConfig.hmacPeerKeys[i];
+        if (entry.valid)
+        {
+          peerCounterManager.setPeerLMK(entry.mac, entry.key);
+          char peer_mac[18];
+          formatMacString(entry.mac, peer_mac);
+          LOG_DEBUGF("SEC", "peer_key_configured peer=%s", peer_mac);
+        }
       }
     }
   }
 
   // ESP-NOW初期化
-  if (esp_now_init() != ESP_OK)
+  esp_err_t espNowInitResult = esp_now_init();
+  if (espNowInitResult != ESP_OK)
   {
-    Serial.print("ERR:ESPNOW_INIT_FAIL\n");
+    LOG_WARNF("ESPNOW", "init_failed error=%d", static_cast<int>(espNowInitResult));
     return;
   }
+
+  LOG_INFOF("ESPNOW", "initialized");
 
   if (systemConfig.espNowSecurityEnabled)
   {
     if (esp_now_set_pmk(systemConfig.pmk) != ESP_OK)
     {
-      Serial.print("WARN:PMK_SET_FAIL\n");
+      LOG_WARNF("SEC", "pmk_set_failed");
     }
   }
 
@@ -180,22 +227,24 @@ void setup()
     else
     {
       peerRegisterFail++;
-      Serial.printf("WARN:PEER_REG_FAIL_AT_BOOT:%02X:%02X:%02X:%02X:%02X:%02X\n",
-                    entry.mac[0], entry.mac[1], entry.mac[2],
-                    entry.mac[3], entry.mac[4], entry.mac[5]);
+      char peer_mac[18];
+      formatMacString(entry.mac, peer_mac);
+      LOG_WARNF("ESPNOW", "peer_registration_failed reason=boot_registration peer=%s", peer_mac);
     }
   }
   if (peerRegisterAttempt > 0)
   {
-    Serial.printf("INFO:PEER_REG_BOOT:OK=%u FAIL=%u\n",
-                  static_cast<unsigned>(peerRegisterSuccess),
-                  static_cast<unsigned>(peerRegisterFail));
+    LOG_INFOF("ESPNOW",
+              "peer_registration_summary ok=%u fail=%u",
+              static_cast<unsigned>(peerRegisterSuccess),
+              static_cast<unsigned>(peerRegisterFail));
   }
 
   // 受信コールバック登録
   esp_now_register_recv_cb(onESPNowReceive);
+  esp_now_register_send_cb(onESPNowSend);
 
-  Serial.print("READY\n");
+  LOG_INFOF("APP", "ready");
 }
 
 void loop()
@@ -248,6 +297,15 @@ bool enqueuePacket(const uint8_t *mac, const uint8_t *data, uint8_t len)
   packet_queue[queue_head].len = len;
 
   queue_head = next;
+
+  char mac_str[18];
+  formatMacString(mac, mac_str);
+  LOG_DEBUGF("QUEUE",
+             "packet_enqueued peer=%s size=%u capacity=%u",
+             mac_str,
+             static_cast<unsigned>(getQueueSize()),
+             static_cast<unsigned>(QUEUE_CAPACITY));
+
   return true;
 }
 
@@ -263,6 +321,14 @@ bool dequeuePacket(Packet *packet)
   memcpy(packet, &packet_queue[queue_tail], sizeof(Packet));
   queue_tail = (queue_tail + 1) % QUEUE_SIZE;
 
+  char mac_str[18];
+  formatMacString(packet->mac, mac_str);
+  LOG_DEBUGF("QUEUE",
+             "packet_dequeued peer=%s size=%u capacity=%u",
+             mac_str,
+             static_cast<unsigned>(getQueueSize()),
+             static_cast<unsigned>(QUEUE_CAPACITY));
+
   return true;
 }
 
@@ -273,16 +339,34 @@ void sendPacketToUART(const Packet *packet)
   char mac_str[18];
   formatMacString(packet->mac, mac_str);
 
+  LOG_DEBUGF("UART",
+             "encode_started peer=%s bytes=%u",
+             mac_str,
+             static_cast<unsigned>(packet->len));
+
   // データをBase64エンコード
   size_t encoded_len = 0;
   unsigned char encoded[400]; // Base64は元のサイズの約4/3倍
 
-  mbedtls_base64_encode(encoded, sizeof(encoded), &encoded_len,
-                        packet->data, packet->len);
+  int encodeRet = mbedtls_base64_encode(encoded,
+                                        sizeof(encoded) - 1,
+                                        &encoded_len,
+                                        packet->data,
+                                        packet->len);
+  if (encodeRet != 0)
+  {
+    LOG_WARNF("UART", "encode_failed peer=%s error=%d", mac_str, encodeRet);
+    return;
+  }
+  encoded[encoded_len] = '\0';
 
   // UART送信: RX:<MAC>|<データ長>|<Base64データ>
   Serial2.printf("RX:%s|%u|%s\n", mac_str, packet->len, encoded);
-  Serial.printf("LOG:UART_TX_TO_GATEWAY:%s|%u\n", mac_str, packet->len);
+  LOG_DEBUGF("UART",
+             "packet_forwarded peer=%s bytes=%u encoded_bytes=%u",
+             mac_str,
+             static_cast<unsigned>(packet->len),
+             static_cast<unsigned>(encoded_len));
 
   sent_count++;
 }
@@ -294,19 +378,24 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len)
 
   char mac_str[18];
   formatMacString(mac, mac_str);
+  LOG_DEBUGF("RX", "packet_received peer=%s bytes=%d", mac_str, len);
 
   // ブロードキャストは運用対象外のため常に破棄する
   if (isBroadcastMac(mac))
   {
     dropped_count++;
-    Serial.printf("LOG:ESPNOW_RX_DROP_BROADCAST:%s|%d\n", mac_str, len);
+    LOG_WARNF("RX", "packet_dropped reason=broadcast_unsupported peer=%s bytes=%d", mac_str, len);
     return;
   }
 
   if (len > MAX_ESPNOW_SIZE)
   {
     dropped_count++;
-    Serial.printf("LOG:ESPNOW_RX_DROP_OVERSIZE:%s|%d\n", mac_str, len);
+    LOG_WARNF("RX",
+              "packet_dropped reason=oversize peer=%s actual=%d maximum=%u",
+              mac_str,
+              len,
+              static_cast<unsigned>(MAX_ESPNOW_SIZE));
     return;
   }
 
@@ -323,7 +412,7 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len)
                                        pkt.hmac))
     {
       dropped_count++;
-      Serial.printf("LOG:ESPNOW_RX_DROP_HMAC:%s|%d\n", mac_str, len);
+      LOG_WARNF("SEC", "packet_dropped reason=hmac_failed peer=%s", mac_str);
       return;
     }
 
@@ -331,21 +420,46 @@ void onESPNowReceive(const uint8_t *mac, const uint8_t *data, int len)
     if (!peerCounterManager.validateRxCounter(mac, pkt.counter))
     {
       dropped_count++;
-      Serial.printf("LOG:ESPNOW_RX_DROP_COUNTER:%s|%lu\n", mac_str,
-                    static_cast<unsigned long>(pkt.counter));
+      LOG_WARNF("SEC",
+                "packet_dropped reason=replay_detected peer=%s counter=%lu",
+                mac_str,
+                static_cast<unsigned long>(pkt.counter));
       return;
     }
+
+    LOG_DEBUGF("SEC", "packet_verified peer=%s counter=%lu", mac_str,
+               static_cast<unsigned long>(pkt.counter));
   }
 
   if (!enqueuePacket(mac, data, len))
   {
     // キュー満杯でドロップ
     dropped_count++;
-    Serial.printf("LOG:ESPNOW_RX_DROP_QUEUE_FULL:%s|%d\n", mac_str, len);
+    LOG_WARNF("QUEUE",
+              "packet_dropped reason=queue_full peer=%s size=%u capacity=%u",
+              mac_str,
+              static_cast<unsigned>(getQueueSize()),
+              static_cast<unsigned>(QUEUE_CAPACITY));
+  }
+}
+
+void onESPNowSend(const uint8_t *mac, esp_now_send_status_t status)
+{
+  if (mac == nullptr)
+  {
+    LOG_WARNF("TX", "delivery_failed reason=missing_peer");
+    return;
+  }
+
+  char mac_str[18];
+  formatMacString(mac, mac_str);
+  if (status == ESP_NOW_SEND_SUCCESS)
+  {
+    LOG_DEBUGF("TX", "delivery_succeeded peer=%s", mac_str);
   }
   else
   {
-    Serial.printf("LOG:ESPNOW_RX_OK:%s|%d\n", mac_str, len);
+    LOG_WARNF("TX", "delivery_failed peer=%s", mac_str);
   }
 }
 
@@ -354,11 +468,16 @@ void handleUARTCommand(String cmd)
 {
   if (cmd.startsWith("TX:"))
   {
+    LOG_DEBUGF("UART",
+               "command_received type=tx chars=%u",
+               static_cast<unsigned>(cmd.length()));
+
     // TX:<宛先MAC>|<Base64データ>
     int separator = cmd.indexOf('|', 3);
 
     if (separator == -1)
     {
+      LOG_WARNF("UART", "command_rejected reason=invalid_format");
       Serial.print("ERR:INVALID_FORMAT\n");
       return;
     }
@@ -372,15 +491,27 @@ void handleUARTCommand(String cmd)
                &peer_mac[0], &peer_mac[1], &peer_mac[2],
                &peer_mac[3], &peer_mac[4], &peer_mac[5]) != 6)
     {
+      String maskedMac = mac_str;
+      if (maskedMac.length() > 24)
+      {
+        maskedMac = maskedMac.substring(0, 24);
+      }
+      LOG_WARNF("UART",
+                "command_rejected reason=invalid_mac value=%s",
+                maskedMac.c_str());
       Serial.print("ERR:INVALID_MAC\n");
       return;
     }
 
     if (isBroadcastMac(peer_mac))
     {
+      LOG_WARNF("UART", "command_rejected reason=broadcast_unsupported");
       Serial.print("ERR:BROADCAST_UNSUPPORTED\n");
       return;
     }
+
+    char peer_mac_str[18];
+    formatMacString(peer_mac, peer_mac_str);
 
     // Base64デコード
     unsigned char decoded[MAX_ESPNOW_SIZE];
@@ -392,16 +523,23 @@ void handleUARTCommand(String cmd)
 
     if (ret != 0 || decoded_len == 0)
     {
+      LOG_WARNF("UART",
+                "command_rejected reason=decode_failed peer=%s error=%d",
+                peer_mac_str,
+                ret);
       Serial.print("ERR:DECODE_FAIL\n");
       return;
     }
 
-    Serial.printf("LOG:UART_RX_FROM_GATEWAY:%s|%u\n", mac_str.c_str(),
-                  static_cast<unsigned>(decoded_len));
+    LOG_DEBUGF("UART",
+               "packet_prepared peer=%s bytes=%u",
+               peer_mac_str,
+               static_cast<unsigned>(decoded_len));
 
     // 送信前にピア登録を保証する
     if (!registerPeerIfNeeded(peer_mac))
     {
+      LOG_WARNF("UART", "command_rejected reason=peer_registration_failed peer=%s", peer_mac_str);
       Serial.print("ERR:PEER_REG_FAIL\n");
       return;
     }
@@ -415,9 +553,14 @@ void handleUARTCommand(String cmd)
       pkt->counter = peerCounterManager.incrementTxCounter(peer_mac, counterOk);
       if (!counterOk)
       {
+        LOG_WARNF("SEC", "packet_build_failed reason=counter_failed peer=%s", peer_mac_str);
         Serial.print("ERR:COUNTER_FAIL\n");
         return;
       }
+      LOG_DEBUGF("SEC",
+                 "counter_assigned peer=%s counter=%lu",
+                 peer_mac_str,
+                 static_cast<unsigned long>(pkt->counter));
 
       memset(pkt->hmac, 0, sizeof(pkt->hmac));
       if (!peerCounterManager.computeHMAC(peer_mac,
@@ -425,9 +568,11 @@ void handleUARTCommand(String cmd)
                                           COMM_DATA_HMAC_DATA_LEN,
                                           pkt->hmac))
       {
+        LOG_WARNF("SEC", "packet_build_failed reason=hmac_failed peer=%s", peer_mac_str);
         Serial.print("ERR:HMAC_FAIL\n");
         return;
       }
+      LOG_DEBUGF("SEC", "hmac_computed peer=%s", peer_mac_str);
     }
 
     // ESP-NOW送信
@@ -436,26 +581,40 @@ void handleUARTCommand(String cmd)
     if (result == ESP_OK)
     {
       Serial2.print("OK\n");
-      Serial.printf("LOG:ESPNOW_TX_OK:%s|%u\n", mac_str.c_str(),
-                    static_cast<unsigned>(decoded_len));
+      LOG_DEBUGF("TX",
+                 "send_accepted peer=%s bytes=%u",
+                 peer_mac_str,
+                 static_cast<unsigned>(decoded_len));
     }
     else
     {
+      LOG_WARNF("TX",
+                "send_rejected peer=%s error=%d",
+                peer_mac_str,
+                static_cast<int>(result));
       Serial.printf("ERR:SEND_FAIL:%d\n", static_cast<int>(result));
     }
   }
   else if (cmd == "STATS")
   {
+    LOG_DEBUGF("UART", "command_received type=stats chars=%u", static_cast<unsigned>(cmd.length()));
     // 統計情報要求
     Serial.printf("RX:%u TX:%u DROP:%u\n",
                   received_count, sent_count, dropped_count);
   }
   else if (cmd == "ping")
   {
+    LOG_DEBUGF("UART", "command_received type=ping chars=%u", static_cast<unsigned>(cmd.length()));
     Serial.print("pong\n");
   }
   else
   {
+    String cmdHead = cmd;
+    if (cmdHead.length() > 24)
+    {
+      cmdHead = cmdHead.substring(0, 24);
+    }
+    LOG_WARNF("UART", "command_rejected reason=unknown_command command=%s", cmdHead.c_str());
     Serial.print("ERR:UNKNOWN_CMD\n");
   }
 }

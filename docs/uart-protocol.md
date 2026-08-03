@@ -83,6 +83,26 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 
 注記: エラー出力は現在 `Serial` 側が中心です。`LOG:*` 診断ログはペイロード全文ではなく長さ中心で出力します。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
 
+## 6.3 診断ログ形式（`Serial`）
+
+診断ログは次の形式で統一します。
+
+```text
+[LEVEL][COMPONENT] event key=value
+```
+
+- LEVEL: `DEBUG` / `INFO` / `WARN`
+- COMPONENT: `APP`, `CFG`, `ESPNOW`, `UART`, `RX`, `TX`, `QUEUE`, `SEC`, `PERF`
+
+例:
+
+```text
+[DEBUG][RX] packet_received peer=AA:BB:CC:DD:EE:FF bytes=152
+[WARN][QUEUE] packet_dropped reason=queue_full peer=AA:BB:CC:DD:EE:FF size=3 capacity=3
+```
+
+`Serial2` の機械通信用出力 (`RX:<...>`, `OK`) にこの診断ログ形式を混在させません。
+
 ## 7. 統計値の意味 (`STATS`)
 
 `STATS` は `Serial` 側へ次の形式で出力されます。

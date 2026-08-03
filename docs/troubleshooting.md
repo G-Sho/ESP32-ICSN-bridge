@@ -25,7 +25,7 @@ ls -l /dev/serial* /dev/ttyAMA*
 pio device monitor
 ```
 
-起動時に `READY` が出るか確認。
+起動時に `[INFO][APP] ready` が出るか確認。
 
 追加確認:
 
@@ -57,11 +57,11 @@ stty -F /dev/ttyAMA0 -a
 sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 ```
 
-## CONFIG_LOAD_FAIL が出る
+## 設定読込失敗ログが出る
 
 症状:
 
-- `WARN:CONFIG_LOAD_FAIL`
+- `[WARN][CFG] config_load_failed ...`
 
 確認:
 
@@ -73,7 +73,7 @@ sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 
 症状:
 
-- `ERR:ESPNOW_INIT_FAIL`
+- `[WARN][ESPNOW] init_failed error=...`
 
 対処:
 
@@ -111,7 +111,7 @@ sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 
 症状:
 
-- `LOG:ESPNOW_RX_DROP_QUEUE_FULL`
+- `[WARN][QUEUE] packet_dropped reason=queue_full ...`
 
 背景:
 
