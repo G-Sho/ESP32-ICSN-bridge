@@ -6,26 +6,31 @@
 // セキュリティ関連定数
 constexpr size_t ESP_NOW_PMK_LEN = 16;
 constexpr size_t ESP_NOW_LMK_LEN = 16;
+constexpr size_t ICSN_HMAC_KEY_LEN = 16;
 
-/// @brief ピア固有LMK設定エントリ
-struct PeerLMKConfig {
-  uint8_t mac[6];               ///< ピアのMACアドレス
-  uint8_t lmk[ESP_NOW_LMK_LEN]; ///< このピア向けのLocal Master Key
-  bool    valid;                 ///< エントリが有効かどうか
+/// @brief ピア固有キー設定エントリ
+struct PeerKeyConfig {
+  uint8_t mac[6];
+  uint8_t key[ICSN_HMAC_KEY_LEN];
+  bool    valid;
 };
-
-/// @brief ピア固有LMKの最大登録数
-constexpr size_t MAX_PEER_LMK_ENTRIES = 20;
+constexpr size_t MAX_PEER_KEY_ENTRIES = 20;
 
 struct SystemConfig {
-  // セキュリティ設定
-  uint8_t pmk[ESP_NOW_PMK_LEN] = {0};  // Primary Master Key
-  uint8_t lmk[ESP_NOW_LMK_LEN] = {0};  // グローバルLocal Master Key（ピア固有LMK未設定時に使用）
-  bool encryptionEnabled = false;
+  // ESP-NOWセキュリティ設定
+  bool espNowSecurityEnabled = false;
+  uint8_t pmk[ESP_NOW_PMK_LEN] = {0};
+  uint8_t espNowDefaultLmk[ESP_NOW_LMK_LEN] = {0};
+  bool espNowDefaultLmkConfigured = false;
+  PeerKeyConfig espNowPeerKeys[MAX_PEER_KEY_ENTRIES];
+  size_t espNowPeerKeyCount = 0;
 
-  // ピア固有LMK設定
-  PeerLMKConfig peerLmkEntries[MAX_PEER_LMK_ENTRIES];
-  size_t peerLmkCount = 0;
+  // ICSNアプリケーションセキュリティ設定（HMAC）
+  bool hmacAuthenticationEnabled = false;
+  uint8_t hmacDefaultKey[ICSN_HMAC_KEY_LEN] = {0};
+  bool hmacDefaultKeyConfigured = false;
+  PeerKeyConfig hmacPeerKeys[MAX_PEER_KEY_ENTRIES];
+  size_t hmacPeerKeyCount = 0;
 };
 
 extern SystemConfig systemConfig;

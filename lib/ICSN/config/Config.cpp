@@ -1,6 +1,7 @@
 #include "Config.hpp"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <cstring>
 
 SystemConfig systemConfig;
 
@@ -39,6 +40,43 @@ static bool macStringToBytes(const char* macStr, uint8_t out[6]) {
   return true;
 }
 
+/// @brief ピアキー配列を読み込む（{"mac":"..","lmk|hmac_key":".."}）
+/// @param peers JSON配列
+/// @param keyField キーフィールド名（"lmk" または "hmac_key"）
+/// @param outEntries 出力先エントリ配列
+/// @param maxEntries 出力先最大数
+/// @param outCount 読み込み成功件数
+/// @return 全エントリ正常時true（不正エントリが1件でもあればfalse）
+static bool loadPeerKeys(JsonArray peers,
+                         const char* keyField,
+                         PeerKeyConfig* outEntries,
+                         size_t maxEntries,
+                         size_t& outCount) {
+  outCount = 0;
+  bool allValid = true;
+
+  for (JsonObject peer : peers) {
+    if (outCount >= maxEntries) {
+      allValid = false;
+      break;
+    }
+
+    const char* macStr = peer["mac"] | "";
+    const char* keyStr = peer[keyField] | "";
+
+    PeerKeyConfig& entry = outEntries[outCount];
+    if (macStringToBytes(macStr, entry.mac) &&
+        hexStringToBytes(keyStr, entry.key, ICSN_HMAC_KEY_LEN)) {
+      entry.valid = true;
+      outCount++;
+    } else {
+      allValid = false;
+    }
+  }
+
+  return allValid;
+}
+
 bool loadSystemConfig(const char* path) {
   if (!LittleFS.begin()) return false;
 
@@ -49,37 +87,61 @@ bool loadSystemConfig(const char* path) {
   DeserializationError error = deserializeJson(doc, file);
   if (error) return false;
 
-  // セキュリティ設定の読み込み
-  const char* pmkStr = doc["PMK"] | "";
-  const char* lmkStr = doc["LMK"] | "";
+  memset(&systemConfig, 0, sizeof(systemConfig));
 
-  if (strlen(pmkStr) == ESP_NOW_PMK_LEN * 2 && strlen(lmkStr) == ESP_NOW_LMK_LEN * 2) {
-    if (hexStringToBytes(pmkStr, systemConfig.pmk, ESP_NOW_PMK_LEN) &&
-        hexStringToBytes(lmkStr, systemConfig.lmk, ESP_NOW_LMK_LEN)) {
-      systemConfig.encryptionEnabled = true;
+  JsonObject espNowSecurity = doc["esp_now_security"].as<JsonObject>();
+  JsonObject icsnSecurity = doc["icsn_security"].as<JsonObject>();
+  if (espNowSecurity.isNull() || icsnSecurity.isNull()) {
+    return false;
+  }
+
+  systemConfig.espNowSecurityEnabled = espNowSecurity["enabled"] | false;
+  systemConfig.hmacAuthenticationEnabled = icsnSecurity["hmac_enabled"] | false;
+
+  bool ok = true;
+
+  if (systemConfig.espNowSecurityEnabled) {
+    const char* pmkStr = espNowSecurity["pmk"] | "";
+    ok = ok && hexStringToBytes(pmkStr, systemConfig.pmk, ESP_NOW_PMK_LEN);
+
+    const char* defaultLmkStr = espNowSecurity["default_lmk"] | "";
+    bool defaultLmkOk = hexStringToBytes(defaultLmkStr,
+                                         systemConfig.espNowDefaultLmk,
+                                         ESP_NOW_LMK_LEN);
+    ok = ok && defaultLmkOk;
+    systemConfig.espNowDefaultLmkConfigured = defaultLmkOk;
+
+    if (espNowSecurity.containsKey("peers")) {
+      JsonArray peers = espNowSecurity["peers"].as<JsonArray>();
+      ok = ok && loadPeerKeys(peers,
+                              "lmk",
+                              systemConfig.espNowPeerKeys,
+                              MAX_PEER_KEY_ENTRIES,
+                              systemConfig.espNowPeerKeyCount);
     }
   }
 
-  // ピア固有LMK設定の読み込み
-  systemConfig.peerLmkCount = 0;
-  memset(systemConfig.peerLmkEntries, 0, sizeof(systemConfig.peerLmkEntries));
+  if (systemConfig.hmacAuthenticationEnabled) {
+    const char* defaultHmacKeyStr = icsnSecurity["default_hmac_key"] | "";
+    bool defaultHmacOk = hexStringToBytes(defaultHmacKeyStr,
+                                          systemConfig.hmacDefaultKey,
+                                          ICSN_HMAC_KEY_LEN);
+    ok = ok && defaultHmacOk;
+    systemConfig.hmacDefaultKeyConfigured = defaultHmacOk;
 
-  if (doc.containsKey("peers")) {
-    JsonArray peers = doc["peers"].as<JsonArray>();
-    for (JsonObject peer : peers) {
-      if (systemConfig.peerLmkCount >= MAX_PEER_LMK_ENTRIES) break;
+    if (icsnSecurity.containsKey("peers")) {
+      JsonArray peers = icsnSecurity["peers"].as<JsonArray>();
+      ok = ok && loadPeerKeys(peers,
+                              "hmac_key",
+                              systemConfig.hmacPeerKeys,
+                              MAX_PEER_KEY_ENTRIES,
+                              systemConfig.hmacPeerKeyCount);
+    }
 
-      const char* macStr  = peer["mac"]  | "";
-      const char* peerLmk = peer["lmk"]  | "";
-
-      PeerLMKConfig& entry = systemConfig.peerLmkEntries[systemConfig.peerLmkCount];
-      if (macStringToBytes(macStr, entry.mac) &&
-          hexStringToBytes(peerLmk, entry.lmk, ESP_NOW_LMK_LEN)) {
-        entry.valid = true;
-        systemConfig.peerLmkCount++;
-      }
+    if (!systemConfig.hmacDefaultKeyConfigured) {
+      ok = false;
     }
   }
 
-  return true;
+  return ok;
 }
