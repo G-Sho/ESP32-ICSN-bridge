@@ -5,6 +5,7 @@
 
 SystemConfig systemConfig;
 ConfigLoadError lastConfigLoadError = ConfigLoadError::None;
+int lastConfigParseErrorCode = 0;
 
 const char *configLoadErrorToReason(ConfigLoadError error)
 {
@@ -117,6 +118,7 @@ static bool loadPeerKeys(JsonArray peers,
 bool loadSystemConfig(const char *path)
 {
   lastConfigLoadError = ConfigLoadError::None;
+  lastConfigParseErrorCode = 0;
 
   if (!LittleFS.begin())
   {
@@ -136,6 +138,7 @@ bool loadSystemConfig(const char *path)
   if (error)
   {
     lastConfigLoadError = ConfigLoadError::ConfigParseFailed;
+    lastConfigParseErrorCode = static_cast<int>(error.code());
     return false;
   }
 

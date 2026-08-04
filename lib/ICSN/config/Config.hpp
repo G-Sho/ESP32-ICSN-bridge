@@ -48,6 +48,7 @@ enum class ConfigLoadError
 };
 
 extern ConfigLoadError lastConfigLoadError;
+extern int lastConfigParseErrorCode;
 const char *configLoadErrorToReason(ConfigLoadError error);
 
 bool loadSystemConfig(const char *path = "/config.json");

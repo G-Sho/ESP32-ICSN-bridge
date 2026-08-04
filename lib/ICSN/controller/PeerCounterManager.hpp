@@ -107,7 +107,7 @@ public:
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0)
     {
-      LOG_WARNF("SEC", "peer_key_config_failed reason=slot_exhaustion");
+      LOG_WARN("[WARN][SEC] peer_key_config_failed reason=slot_exhaustion");
       return false;
     }
     memcpy(peers[idx].lmk, lmk, PEER_LMK_LEN);
@@ -124,7 +124,7 @@ public:
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0)
     {
-      LOG_WARNF("SEC", "counter_increment_failed reason=slot_exhaustion");
+      LOG_WARN("[WARN][SEC] counter_increment_failed reason=slot_exhaustion");
       success = false;
       return 0;
     }
@@ -142,7 +142,7 @@ public:
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0)
     {
-      LOG_WARNF("SEC", "counter_validate_failed reason=slot_exhaustion");
+      LOG_WARN("[WARN][SEC] counter_validate_failed reason=slot_exhaustion");
       return false;
     }
 
@@ -169,13 +169,13 @@ public:
     int idx = findOrCreatePeerIndex(mac);
     if (idx < 0)
     {
-      LOG_WARNF("SEC", "hmac_compute_failed reason=slot_exhaustion");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=slot_exhaustion");
       return false;
     }
     const uint8_t *lmk = resolveLmk(idx);
     if (lmk == nullptr)
     {
-      LOG_WARNF("SEC", "hmac_compute_failed reason=lmk_unset");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=lmk_unset");
       return false;
     }
 
@@ -185,25 +185,25 @@ public:
     if (mbedtls_md_setup(&ctx, info, 1) != 0)
     {
       mbedtls_md_free(&ctx);
-      LOG_WARNF("SEC", "hmac_compute_failed reason=mbedtls_md_setup_failed");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=mbedtls_md_setup_failed");
       return false;
     }
     if (mbedtls_md_hmac_starts(&ctx, lmk, PEER_LMK_LEN) != 0)
     {
       mbedtls_md_free(&ctx);
-      LOG_WARNF("SEC", "hmac_compute_failed reason=mbedtls_hmac_starts_failed");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=mbedtls_hmac_starts_failed");
       return false;
     }
     if (mbedtls_md_hmac_update(&ctx, data, dataLen) != 0)
     {
       mbedtls_md_free(&ctx);
-      LOG_WARNF("SEC", "hmac_compute_failed reason=mbedtls_hmac_update_failed");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=mbedtls_hmac_update_failed");
       return false;
     }
     if (mbedtls_md_hmac_finish(&ctx, outHmac) != 0)
     {
       mbedtls_md_free(&ctx);
-      LOG_WARNF("SEC", "hmac_compute_failed reason=mbedtls_hmac_finish_failed");
+      LOG_WARN("[WARN][SEC] hmac_compute_failed reason=mbedtls_hmac_finish_failed");
       return false;
     }
     mbedtls_md_free(&ctx);
@@ -235,25 +235,25 @@ public:
   /// @brief 全ピアのカウンタ状態を出力する
   void printCounters() const
   {
-    LOG_DEBUGF("SEC", "counter_state_begin");
+    LOG_DEBUG("[DEBUG][SEC] counter_state_begin");
     bool any = false;
     for (size_t i = 0; i < MAX_PEERS; i++)
     {
       if (!peers[i].active)
         continue;
       any = true;
-      Serial.printf("[DEBUG][SEC] counter_state peer=%02X:%02X:%02X:%02X:%02X:%02X tx=%lu rx=%lu lmk_source=%s\n",
-                    peers[i].peer_mac[0], peers[i].peer_mac[1],
-                    peers[i].peer_mac[2], peers[i].peer_mac[3],
-                    peers[i].peer_mac[4], peers[i].peer_mac[5],
-                    (unsigned long)peers[i].tx_counter,
-                    (unsigned long)peers[i].rx_counter,
-                    peers[i].lmk_set ? "peer" : (globalLmkSet ? "global" : "none"));
+      LOG_DEBUGF("[DEBUG][SEC] counter_state peer=%02X:%02X:%02X:%02X:%02X:%02X tx=%lu rx=%lu lmk_source=%s\n",
+                 peers[i].peer_mac[0], peers[i].peer_mac[1],
+                 peers[i].peer_mac[2], peers[i].peer_mac[3],
+                 peers[i].peer_mac[4], peers[i].peer_mac[5],
+                 (unsigned long)peers[i].tx_counter,
+                 (unsigned long)peers[i].rx_counter,
+                 peers[i].lmk_set ? "peer" : (globalLmkSet ? "global" : "none"));
     }
     if (!any)
     {
-      LOG_DEBUGF("SEC", "counter_state_empty");
+      LOG_DEBUG("[DEBUG][SEC] counter_state_empty");
     }
-    LOG_DEBUGF("SEC", "counter_state_end");
+    LOG_DEBUG("[DEBUG][SEC] counter_state_end");
   }
 };

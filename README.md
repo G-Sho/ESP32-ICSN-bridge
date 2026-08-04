@@ -58,7 +58,10 @@ ICSN sensor node(s) <--ESP-NOW--> ESP32-ICSN-bridge <--UART--> Raspberry Pi gate
 - `Serial` (USB): デバッグログ、エラーログ、開発用コマンド入力
 - `Serial2` (GPIO16/17): Raspberry Pi との実運用 UART 通信
 
-注記: 現在の実装では、送信成功応答 `OK` は `Serial2`、多くのエラーは `Serial` に出力されます。
+注記: `TX:` 要求に対する `OK` / `ERR:*` は入力チャネルへ返します。
+
+- Raspberry Pi から `Serial2` へ送信した要求の応答は `Serial2`
+- USB シリアル (`Serial`) から送信した要求の応答は `Serial`
 
 診断ログは `Serial` に対して次の形式で出力されます。
 
@@ -150,8 +153,8 @@ pio device monitor --port <PORT> --baud 115200
 
 - ブロードキャスト MAC (`FF:FF:FF:FF:FF:FF`) は受信時ドロップ、送信時は非対応
 - 受信キューは内部配列 4 要素、実効容量は最大 3 パケット
-- `STATS`、エラーは `Serial` 側に出力される
-- 運用 UART (`Serial2`) の主応答は `RX:<...>` と `OK`
+- `STATS` は `Serial` 側に出力される
+- 運用 UART (`Serial2`) の主応答は `RX:<...>`, `OK`, `ERR:*`
 - `Serial2` に診断ログは混在しない
 
 ## ドキュメント
