@@ -58,7 +58,6 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 
 - `TX:<DST_MAC>|<BASE64_PAYLOAD>`
 - `STATS`
-- `ping`
 
 ## 6. 応答コード
 
@@ -66,9 +65,19 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 
 - `OK`
 - `RX:<...>`
+- `ERR:INVALID_FORMAT`
+- `ERR:INVALID_MAC`
+- `ERR:BROADCAST_UNSUPPORTED`
+- `ERR:DECODE_FAIL`
+- `ERR:PEER_REG_FAIL`
+- `ERR:COUNTER_FAIL`
+- `ERR:HMAC_FAIL`
+- `ERR:SEND_FAIL:<esp_err_t>`
+- `ERR:UNKNOWN_CMD`
 
 ### 6.2 `Serial` 側
 
+- `OK`
 - `ERR:INVALID_FORMAT`
 - `ERR:INVALID_MAC`
 - `ERR:BROADCAST_UNSUPPORTED`
@@ -79,9 +88,32 @@ TX:<DST_MAC>|<BASE64_PAYLOAD>
 - `ERR:SEND_FAIL:<esp_err_t>`
 - `ERR:UNKNOWN_CMD`
 - `RX:<count> TX:<count> DROP:<count>` (`STATS`)
-- `pong` (`ping`)
 
 注記: エラー出力は現在 `Serial` 側が中心です。`LOG:*` 診断ログはペイロード全文ではなく長さ中心で出力します。Raspberry Pi 側実装を組む際は、このチャネル差を前提にしてください。
+
+`TX:` 要求に対する `OK` / `ERR:*` は入力されたチャネルへ返します。
+- Raspberry Pi から `Serial2` に送った場合: 応答は `Serial2`
+- USB シリアルから `Serial` に送った場合: 応答は `Serial`
+
+## 6.3 診断ログ形式（`Serial`）
+
+診断ログは次の形式で統一します。
+
+```text
+[LEVEL][COMPONENT] event key=value
+```
+
+- LEVEL: `DEBUG` / `INFO` / `WARN`
+- COMPONENT: `APP`, `CFG`, `ESPNOW`, `UART`, `RX`, `TX`, `QUEUE`, `SEC`, `PERF`
+
+例:
+
+```text
+[DEBUG][RX] packet_received peer=AA:BB:CC:DD:EE:FF bytes=152
+[WARN][QUEUE] packet_dropped reason=queue_full peer=AA:BB:CC:DD:EE:FF size=3 capacity=3
+```
+
+`Serial2` の機械通信用出力 (`RX:<...>`, `OK`) にこの診断ログ形式を混在させません。
 
 ## 7. 統計値の意味 (`STATS`)
 
@@ -104,6 +136,10 @@ RX:<count> TX:<count> DROP:<count>
 - ESP-NOW 最大長は 250 バイトに制限
 - Base64 デコード結果が 0 バイトなら `ERR:DECODE_FAIL`
 - HMAC/counter 処理は、デコード結果長が `sizeof(CommunicationData)` のときのみ適用
+
+診断ログでは、Base64 デコード失敗と 0 バイト受信を次で区別します。
+- `reason=decode_failed`
+- `reason=empty_payload`
 
 ## 9. 互換性ルール
 
