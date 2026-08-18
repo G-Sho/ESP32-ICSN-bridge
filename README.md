@@ -149,6 +149,13 @@ pio run --target upload --upload-port <PORT>
 pio device monitor --port <PORT> --baud 115200
 ```
 
+ESP-NOW callback内のDEBUGログまで確認したい場合は `esp32dev-debug` env を使用してください（既定 env は INFO レベル）。
+
+```bash
+pio run -e esp32dev-debug
+pio device monitor -e esp32dev-debug
+```
+
 ## 既知の制約
 
 - ブロードキャスト MAC (`FF:FF:FF:FF:FF:FF`) は受信時ドロップ、送信時は非対応

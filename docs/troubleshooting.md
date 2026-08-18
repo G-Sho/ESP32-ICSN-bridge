@@ -61,7 +61,9 @@ sudo stty -F /dev/ttyAMA0 -echo -echoe -echok -echoctl -echoke
 
 症状:
 
-- `[WARN][CFG] config_load_failed ...`
+- `[WARN][CFG] littlefs_mount_failed`
+- `[WARN][CFG] config_open_failed path=...`
+- `[WARN][CFG] config_parse_failed error=...`
 
 確認:
 
